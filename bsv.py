@@ -198,7 +198,7 @@ class BSV:
         '''
 
         # empty list to keep track of nodes with edges
-        has_edge = []
+        allied = []
         # iterate through nodes
         poss = 1
         # keep creating links while value is shorter
@@ -207,15 +207,15 @@ class BSV:
             # iterate through nodes
             for node in network.nodes(data=True):
                 # if in has_edge list pass (already has an edge)
-                if node[0] not in has_edge:
+                if node[0] not in allied:
                     # iterate through possible mates 1 index is name
                     for maybe_mate in node[1]['maybe_mates']:
-                        if node[0] in has_edge:
+                        if node[0] in allied:
                             break
 
                         if maybe_mate[3] <= poss:
                             # ensure node isnot already has_edge
-                            if maybe_mate[1] not in has_edge:
+                            if maybe_mate[1] not in allied:
                                 # iterate through possible mates
                                 for i in network.nodes[maybe_mate[1]]["maybe_mates"]:
                                     # see if node is a possible mate
@@ -227,8 +227,8 @@ class BSV:
                                             network.add_edge(
                                                 node[0], maybe_mate[1])
                                             # add both nodes to list
-                                            has_edge.append(node[0])
-                                            has_edge.append(maybe_mate[1])
+                                            allied.append(node[0])
+                                            allied.append(maybe_mate[1])
                                             break
             # increase value of poss to explore next best option
             poss += 1
@@ -236,8 +236,10 @@ class BSV:
             self.coalesced = True
 
         # if no more alliances are made change variable to stop
-        if len(has_edge) == 0:
+        if len(allied) == 0:
             self.coalesced = True
+
+        # print("HERE", test)
 
     def new_node(self, network):
         '''
@@ -391,12 +393,12 @@ class BSV:
             self.new_node(self.net)
             count += 1
 
-        for each in self.subnets.items():
+        for subnet in self.subnets.items():
             self.coalesced = False
             # print (each)
             while not self.coalesced:
-                self.assess_coalitions(each[1])
-                self.make_alliance(each[1], 'two')
+                self.assess_coalitions(subnet[1])
+                self.make_alliance(subnet[1], 'two')
         self.check_alliances(self.subnets, self.net)
         self.result = (list(self.net.nodes()))
         self.result_verbose = (list(self.net.nodes(data=True)))

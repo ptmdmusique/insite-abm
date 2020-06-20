@@ -2,7 +2,7 @@ from mesa import Model
 from mesa.time import BaseScheduler
 from cit_agent import CitAgent
 from bsv import BSV
-import pandas as pd
+from model_helper import CoalitionHelper
 
 
 class NetLogoModel(Model):
@@ -22,12 +22,18 @@ class NetLogoModel(Model):
         '''Advance the model by one step.'''
         self.schedule.step()
 
-        # Forming coalition
-        coalition = BSV(self.schedule.agents, "power", "pref", verbose=False)
-        # Show a list of how agents group together
-        print(coalition.result)
+        coalition_helper = CoalitionHelper(
+            self.schedule.agents, "unique_id", "power", "pref")
+        coalition_helper.form_coalition()
+        # # Forming coalition
+        # coalition = BSV(self.schedule.agents, "power", "pref", verbose=False)
+        # # Show a list of how agents group together
+        # print(len(coalition.result))
+        # print(len(coalition.result[0].split('.')))
+        # print(len(coalition.result[1].split('.')))
+        # print(coalition.result)
         # Show a list of how agents grouped together and each groups power and preference attribute
-        print(coalition.result_verbose)
+        # print(coalition.result_verbose)
         # Show a dictionary of each group, the agents within that group
         # and each agents updated power and preference value based on their assimilation into the group
-        print(coalition.subresults)
+        # print(coalition.subresults)
