@@ -28,6 +28,8 @@ class CoalitionHelper():
         self.efficiency = efficiency_parameter
 
     def check_coalition(self, agent, other):
+        # Condition to form coalition:
+        #   bilateral shapley value > own power on both ends
         agent_power = getattr(agent, self.power_key)
         other_power = getattr(agent, self.power_key)
         agent_pref = getattr(agent, self.pref_key)
@@ -49,30 +51,83 @@ class CoalitionHelper():
         if shap1 > agent_power and shap2 > other_power:
             # if a coalition increases both utilities
             # then this coalition is good enough
-            return coal_power, pot_eu
+            # Coalition preference
+            coal_pref = \
+                ((agent_pref * agent_power + other_pref * other_power) /
+                 (agent_power + other_power + 0.0000001))
+            return coal_power, pot_eu, coal_pref
+
         return None, None
 
     def form_coalition(self):
-        # Map of potential coalition of each agent
-        pot_coal = {}
+        # Map of potential coalition of each agent where
+        #   key: agent_id
+        #   value: potential coalition of that agent
+        pot_coal_dict = {}
         id_of = attrgetter(self.id_key)
 
+        # Try to form every possible coalition
+        # This is technically an agent sending message out to others
         for agent in self.agents:
             # Check from one agent to another
             agent_id = id_of(agent)
-            for other in self.agents:
+            # TODO: Replace this with more efficient methods
+            """ Ideas:
+                1: small world network
+                2: direct neighbor
+                3: all other agents *** currently ***
+            """
+            neighbor_list = self.agents
+            for other in neighbor_list:
                 # No point to check against itself
                 if agent != other:
-                    coal_power, pot_eu = self.check_coalition(agent, other)
+                    coal_power, pot_eu, coal_pref = \
+                        self.check_coalition(agent, other)
 
-                    # Coalition is sensible
+                    # Coalition is good enough
                     if coal_power is not None:
-                        # No possible mate yet
-                        # or coalition with higher expected util
-                        if agent_id not in pot_coal or \
-                                pot_coal[agent_id]["coal_eu"] < pot_eu:
-                            pot_coal[agent_id] = {
+                        def add_pot_coal():
+                            pot_coal_dict[agent_id] = {
                                 "other_id": id_of(other),
                                 "coal_power": coal_power,
-                                "coal_eu": pot_eu
+                                "coal_eu": pot_eu,
+                                "coal_pref": coal_pref
                             }
+
+                        # No possible mate yet
+                        if agent_id not in pot_coal_dict:
+                            add_pot_coal()
+                        else:
+                            pot_coal = pot_coal_dict[agent_id]
+                            if pot_coal["coal_eu"] < pot_eu:
+                                # or coalition with higher expected util
+                                add_pot_coal()
+                            elif (pot_coal["coal_eu"] == pot_eu and
+                                  pot_coal["coal_pref"] > coal_pref):
+                                # or coalition with same expected utility
+                                # but with closer pref
+                                # that is: old coal pref > new coal pref
+                                add_pot_coal()
+
+        # Check each possible coalition if both ends like the coalition
+        coalition_list = []
+        for agent_id, coal_info in pot_coal_dict.items():
+            # First retrieve the potential coalition from other end
+            other_id = coal_info['other_id']
+            other_coal_info = pot_coal_dict[other_id]
+
+            if other_coal_info is not None \
+                    and agent_id == other_coal_info['other_id']:
+                # Both coalition refer to each other
+                # Then we form a new coalition
+
+                # TODO: Decide what info to add into coalition list here
+                coalition_list.append({})
+                # TODO: Update both agents attributes
+
+                # Remove the item from possible coalition list
+                #   to avoid duplicates
+                # ? This only works if an agent can't be in
+                # ? more than 1 coalition
+                pot_coal_dict.pop(agent_id)
+                pot_coal_dict.pop(other_id)
