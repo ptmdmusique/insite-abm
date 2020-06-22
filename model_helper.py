@@ -57,7 +57,7 @@ class CoalitionHelper():
                  (agent_power + other_power + 0.0000001))
             return coal_power, pot_eu, coal_pref
 
-        return None, None
+        return None, None, None
 
     def form_coalition(self):
         # Map of potential coalition of each agent where
@@ -111,23 +111,35 @@ class CoalitionHelper():
 
         # Check each possible coalition if both ends like the coalition
         coalition_list = []
+        formed_list = []    # List of agents already in coalition
         for agent_id, coal_info in pot_coal_dict.items():
             # First retrieve the potential coalition from other end
             other_id = coal_info['other_id']
+            if other_id in formed_list:
+                # No point of forming coalition with the same agent
+                continue
+
             other_coal_info = pot_coal_dict[other_id]
 
             if other_coal_info is not None \
                     and agent_id == other_coal_info['other_id']:
-                # Both coalition refer to each other
-                # Then we form a new coalition
-
-                # TODO: Decide what info to add into coalition list here
-                coalition_list.append({})
-                # TODO: Update both agents attributes
+                # If both coalition refer to each other
+                #   then we form a new coalition
+                coalition_list.append({
+                    "id_1": agent_id,
+                    "id_2": other_id,
+                    "coal_power": coal_info["coal_power"],
+                    "coal_eu": coal_info["coal_eu"],
+                    "coal_pref": coal_info["coal_pref"],
+                })
+                # ! Note: We don't update agents attributes here
+                # ! to avoid side effect
 
                 # Remove the item from possible coalition list
                 #   to avoid duplicates
                 # ? This only works if an agent can't be in
                 # ? more than 1 coalition
-                pot_coal_dict.pop(agent_id)
-                pot_coal_dict.pop(other_id)
+                formed_list += [agent_id, other_id]
+
+        print(coalition_list)
+        return coalition_list
