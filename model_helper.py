@@ -79,7 +79,7 @@ class CoalitionHelper():
             """
             neighbor_list = self.agents
             for other in neighbor_list:
-                # No point to check against itself
+                # No point to check against itself`
                 if agent != other:
                     coal_power, pot_eu, coal_pref = \
                         self.check_coalition(agent, other)

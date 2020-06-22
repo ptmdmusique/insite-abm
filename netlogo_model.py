@@ -1,7 +1,8 @@
 from mesa import Model
 from mesa.time import BaseScheduler
+from mesa_geo import GeoSpace, AgentCreator
+
 from cit_agent import CitAgent
-from bsv import BSV
 from model_helper import CoalitionHelper
 
 
@@ -10,8 +11,12 @@ class NetLogoModel(Model):
 
     def __init__(self, agent_list):
         # Initialize the schedule
-        self.num_agents = len(agent_list)
         self.schedule = BaseScheduler(self)
+
+        self.grid = GeoSpace()
+        state_agent_kwargs = dict(model=self)
+        AC = AgentCreator(agent_class=CitAgent,
+                          agent_kwargs=state_agent_kwargs)
 
         # Create agents
         for agent_attr in agent_list:

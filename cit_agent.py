@@ -2,7 +2,7 @@ from mesa import Agent
 
 
 class CitAgent(Agent):
-    """An agent with fixed initial wealth."""
+    """A citizen in our model."""
 
     def __init__(self, model, attr_list):
         super().__init__(attr_list['id'], model)
