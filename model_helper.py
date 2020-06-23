@@ -87,7 +87,7 @@ class CoalitionHelper():
             neighbor_type {int} -- type of neightbor to get for each cit
                 0: treats all cits as neighbor
                 1: direct neighbor
-                2: small world network # TODO
+                2: small world network
                 (default: {0})
         """
 
@@ -144,7 +144,7 @@ class CoalitionHelper():
                 # No point of forming coalition with the same agent
                 continue
 
-            other_coal_info = pot_coal_dict[other_id]
+            other_coal_info = pot_coal_dict.get(other_id)
 
             if other_coal_info is not None \
                     and agent_id == other_coal_info['other_id']:
@@ -166,5 +166,4 @@ class CoalitionHelper():
                 # ? more than 1 coalition
                 formed_list += [agent_id, other_id]
 
-        print(coalition_list)
         return coalition_list
