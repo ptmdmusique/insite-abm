@@ -1,5 +1,4 @@
 from operator import attrgetter
-
 # REFERENCE: https://github.com/tpike3/bilateralshapley
 
 
@@ -59,7 +58,39 @@ class CoalitionHelper():
 
         return None, None, None
 
-    def form_coalition(self):
+    def get_neighbor(self, agent_list, agent, model=None, neighbor_type=0):
+        """Generate list of neighbor of the "agent"
+
+        Args:
+            agent_list ([list]): list of agent to check
+            agent ([object]): current agent
+            neighbor_type ([int]): type of neightbor to get for each cit
+                0: treats all cits as neighbor
+                1: direct neighbor
+                2: small world network # TODO
+                (default: {0})
+        """
+        if neighbor_type == 0:
+            # Make a copy of the old list and remove the
+            #   instance of the agent in that list
+            new_list = agent_list[:]
+            new_list.pop(agent_list.index(agent))
+            return new_list
+        if neighbor_type == 1:
+            # ! Make sure this is an mesa_geo model!
+            return model.get_neighbors(agent)
+
+    def form_coalition(self, model=None, neighbor_type=0):
+        """Return a list of coalition from given agent list
+        Args:
+            model {Object} -- Mesa model object {default: {None}}
+            neighbor_type {int} -- type of neightbor to get for each cit
+                0: treats all cits as neighbor
+                1: direct neighbor
+                2: small world network # TODO
+                (default: {0})
+        """
+
         # Map of potential coalition of each agent where
         #   key: agent_id
         #   value: potential coalition of that agent
@@ -71,43 +102,37 @@ class CoalitionHelper():
         for agent in self.agents:
             # Check from one agent to another
             agent_id = id_of(agent)
-            # TODO: Replace this with more efficient methods
-            """ Ideas:
-                1: small world network
-                2: direct neighbor
-                3: all other agents *** currently ***
-            """
-            neighbor_list = self.agents
+            neighbor_list = self.get_neighbor(
+                self.agents, agent, model, neighbor_type)
             for other in neighbor_list:
                 # No point to check against itself`
-                if agent != other:
-                    coal_power, pot_eu, coal_pref = \
-                        self.check_coalition(agent, other)
+                coal_power, pot_eu, coal_pref = \
+                    self.check_coalition(agent, other)
 
-                    # Coalition is good enough
-                    if coal_power is not None:
-                        def add_pot_coal():
-                            pot_coal_dict[agent_id] = {
-                                "other_id": id_of(other),
-                                "coal_power": coal_power,
-                                "coal_eu": pot_eu,
-                                "coal_pref": coal_pref
-                            }
+                # Coalition is good enough
+                if coal_power is not None:
+                    def add_pot_coal():
+                        pot_coal_dict[agent_id] = {
+                            "other_id": id_of(other),
+                            "coal_power": coal_power,
+                            "coal_eu": pot_eu,
+                            "coal_pref": coal_pref
+                        }
 
-                        # No possible mate yet
-                        if agent_id not in pot_coal_dict:
+                    # No possible mate yet
+                    if agent_id not in pot_coal_dict:
+                        add_pot_coal()
+                    else:
+                        pot_coal = pot_coal_dict[agent_id]
+                        if pot_coal["coal_eu"] < pot_eu:
+                            # or coalition with higher expected util
                             add_pot_coal()
-                        else:
-                            pot_coal = pot_coal_dict[agent_id]
-                            if pot_coal["coal_eu"] < pot_eu:
-                                # or coalition with higher expected util
-                                add_pot_coal()
-                            elif (pot_coal["coal_eu"] == pot_eu and
-                                  pot_coal["coal_pref"] > coal_pref):
-                                # or coalition with same expected utility
-                                # but with closer pref
-                                # that is: old coal pref > new coal pref
-                                add_pot_coal()
+                        elif (pot_coal["coal_eu"] == pot_eu and
+                                pot_coal["coal_pref"] > coal_pref):
+                            # or coalition with same expected utility
+                            # but with closer pref
+                            # that is: old coal pref > new coal pref
+                            add_pot_coal()
 
         # Check each possible coalition if both ends like the coalition
         coalition_list = []

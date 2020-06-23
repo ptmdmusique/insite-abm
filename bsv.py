@@ -239,8 +239,6 @@ class BSV:
         if len(allied) == 0:
             self.coalesced = True
 
-        # print("HERE", test)
-
     def new_node(self, network):
         '''
         Tasks:

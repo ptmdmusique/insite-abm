@@ -20,7 +20,7 @@ routePath = sys.argv[5]         # Path to route shapefile
 outCSVPath = sys.argv[6]        # Path to csv out file
 outCitPath = sys.argv[7]        # Path to cit json out file
 outShapePath = sys.argv[8]      # Path to chosen cit geojson
-
+outCompactShapePath = sys.argv[9]      # Path to chosen cit geojson
 # Process:
 #   Read in cit geojson file
 #     Extract cit data and corresponding area shape
@@ -123,7 +123,6 @@ with open(citPath) as jsonFile:
         citPropertyList.append(citProperty)
 
 # Initialize dataframe for input
-# Get <initialNumber> random rows from df
 dfr = pd.DataFrame(data=[row.values()
                          for row in citPropertyList],
                    columns=inputColumnHeaders)
@@ -131,10 +130,6 @@ dfr = dfr.apply(pd.to_numeric)  # Transform them into number
 # Get the list of coordinates and transform into points
 citPointList = [Point(i) for i in list(zip(dfr.longitude, dfr.lattitude))]
 idList = [id for id in dfr.id]
-
-
-# Filter the shapeList and keep only those we have in the idList
-# citShapeList = list(filter(lambda shape: shape['id'] in idList, citShapeList))
 
 # Also change the features list to just the chosen cits
 citShapeJSON['features'] = citShapeList
@@ -259,6 +254,10 @@ else:
 # Get only the elements with chosen indices
 dfOut = dfOut.iloc[rIndexList]
 
+# Filter the shapeList and keep only those we have in the idList
+compactCitShape = {shape['id']: shape['geometry']
+                   for shape in citShapeList if shape['id'] in dfOut['id'].values}
+
 # Output to file
 # Tick for further processing
 with open(outCSVPath, 'w+') as outFile:
@@ -284,6 +283,10 @@ with open(outCitPath, 'w') as jsonFile:
 # For heatmap
 with open(outShapePath, 'w') as jsonFile:
     json.dump(citShapeJSON, jsonFile)
+
+# For heatmap
+with open(outCompactShapePath, 'w') as jsonFile:
+    json.dump(compactCitShape, jsonFile)
 
 # Return the new initial number for Java process to read
 print("initialNumber {}".format(len(rIndexList)))

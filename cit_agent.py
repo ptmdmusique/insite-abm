@@ -1,11 +1,16 @@
-from mesa import Agent
+from shapely.geometry.base import BaseGeometry
+from mesa_geo import GeoAgent
 
 
-class CitAgent(Agent):
+class CitAgent(GeoAgent):
     """A citizen in our model."""
 
-    def __init__(self, model, attr_list):
-        super().__init__(attr_list['id'], model)
+    def __init__(self, model, attr_list, shape):
+        # Make sure the shape is a shapely object
+        if not isinstance(shape, BaseGeometry):
+            raise TypeError("Shape must be a Shapely Geometry")
+        super().__init__(attr_list['id'], model, shape)
+
         # Delete the id key:value since we already used it
         if attr_list.pop('id', None) is None:
             print("ERROR --- agent with unknown id found {}".format(attr_list))
@@ -15,4 +20,5 @@ class CitAgent(Agent):
         for k, v in attr_list.items():
             setattr(self, k, v)
 
-    # def step(self):
+    def step(self):
+        pass
