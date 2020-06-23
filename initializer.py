@@ -64,7 +64,7 @@ inputColumnHeaders = [
 outputColumnHeaders = [
     'id', 'xcor', 'ycor',
     'own-pref', 'ideo', 'idatt', 'pref', 'tpreference',
-    'power', 'prox', 'proximity', 'salience', 'im', 'ran',
+    'power', 'closest_distance', 'proximity', 'salience', 'im', 'ran',
     'own-eu'
 ]
 
@@ -193,8 +193,8 @@ dfOut['idatt'] = dfOut.apply(
     lambda row: row['ideo'] * 0.9 + row['ran'] * 0.1, axis=1)
 
 # Append the proximity column with the nearest point result array
-dfOut['prox'] = closestDistanceList
-dfOut['proximity'] = dfOut.apply(lambda row: 1 / row['prox'], axis=1)
+dfOut['closest_distance'] = closestDistanceList
+dfOut['proximity'] = dfOut.apply(lambda row: 1 / row['closest_distance'], axis=1)
 dfOut['pref'] = dfOut.apply(lambda row: (
     (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
 
@@ -220,7 +220,7 @@ dfOut['tpreference'] = dfOut.apply(
 
 
 # Then we filter out only the cit within acceptable range
-dfOut = dfOut.sort_values(by=['prox'])
+dfOut = dfOut.sort_values(by=['closest_distance'])
 dfOut = dfOut.reset_index(drop=True)  # Reset the index
 # Convert acceptable range distance from km to degree: 111km ~ 1 degree
 #  https://www.longitudestore.com/how-big-is-one-gps-degree.html
