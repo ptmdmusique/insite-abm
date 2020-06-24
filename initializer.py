@@ -65,7 +65,7 @@ outputColumnHeaders = [
     'id', 'xcor', 'ycor',
     'own-pref', 'ideo', 'idatt', 'pref', 'tpreference',
     'power', 'closest_distance', 'proximity', 'salience', 'im', 'ran',
-    'own-eu'
+    'utility'
 ]
 
 # Keys
@@ -194,7 +194,8 @@ dfOut['idatt'] = dfOut.apply(
 
 # Append the proximity column with the nearest point result array
 dfOut['closest_distance'] = closestDistanceList
-dfOut['proximity'] = dfOut.apply(lambda row: 1 / row['closest_distance'], axis=1)
+dfOut['proximity'] = dfOut.apply(
+    lambda row: 1 / row['closest_distance'], axis=1)
 dfOut['pref'] = dfOut.apply(lambda row: (
     (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
 
@@ -204,7 +205,7 @@ dfOut['own-power'] = dfOut['power'] = dfr['power'].values
 
 dfOut['own-pref'] = dfOut.apply(lambda row: (
     (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
-dfOut['own-eu'] = dfOut.apply(lambda row: (
+dfOut['utility'] = dfOut.apply(lambda row: (
     100 - abs(row['own-pref'] - row['own-pref'])) * row['own-power'], axis=1)
 
 dfOut['salience'] = dfOut.apply(

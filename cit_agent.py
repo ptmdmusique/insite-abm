@@ -21,4 +21,8 @@ class CitAgent(GeoAgent):
             setattr(self, k, v)
 
     def step(self):
-        pass
+        # Forming coalition will be handled by the model
+        #   before this agent.step() is called
+
+        # Update attributes every step after coalitions are formed
+        self.tpreference = self.pref * self.salience

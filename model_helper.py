@@ -1,11 +1,25 @@
 from operator import attrgetter
+from functools import reduce
 # REFERENCE: https://github.com/tpike3/bilateralshapley
+
+
+class ModelCalculator():
+    @staticmethod
+    def compute_total(attribute):
+        def helper(model):
+            def reducer(accum, agent):
+                return accum + getattr(agent, attribute)
+
+            agents = model.schedule.agents
+            return reduce(reducer, agents, 0)
+
+        return helper
 
 
 class CoalitionHelper():
     '''Helper to form coalitions for agents'''
 
-    def __init__(self, agents, id_key, power_key, pref_key,
+    def __init__(self, agents, id_key, power_key, pref_key, util_key,
                  efficiency_parameter=1.5):
         """Initialize coalition helper
 
@@ -24,15 +38,18 @@ class CoalitionHelper():
         self.id_key = id_key
         self.power_key = power_key
         self.pref_key = pref_key
+        self.util_key = util_key
         self.efficiency = efficiency_parameter
 
     def check_coalition(self, agent, other):
         # Condition to form coalition:
         #   bilateral shapley value > own power on both ends
         agent_power = getattr(agent, self.power_key)
-        other_power = getattr(agent, self.power_key)
+        other_power = getattr(other, self.power_key)
         agent_pref = getattr(agent, self.pref_key)
-        other_pref = getattr(agent, self.pref_key)
+        other_pref = getattr(other, self.pref_key)
+        agent_util = getattr(agent, self.util_key)
+        other_util = getattr(other, self.util_key)
 
         coal_power = (agent_power + other_power) * self.efficiency
         # ? TODO: check if this should be 100 or 1
@@ -40,12 +57,15 @@ class CoalitionHelper():
         # ? Well, they normalized the preference hmmm
         diff_pref = 100 - abs(agent_pref - other_pref)
         # Expected utility of the coalition
-        pot_eu = coal_power * diff_pref
+        inter_eu = coal_power * diff_pref
 
-        # determine bilateral shapley value for both agents
+        # Determine bilateral shapley value for both agents
         # TODO: Check whether we should use power or expected utility
-        shap1 = 0.5 * (agent_power + (pot_eu - other_power))
-        shap2 = 0.5 * (other_power + (pot_eu - agent_power))
+        # shap1 = 0.5 * (agent_power + (inter_eu - other_power))
+        # shap2 = 0.5 * (other_power + (inter_eu - agent_power))
+        shap1 = 0.5 * (self.efficiency * agent_util + inter_eu)
+        shap2 = 0.5 * (self.efficiency * other_util + inter_eu)
+        coal_util = 0.5 * shap1 + 0.5 * shap2
 
         if shap1 > agent_power and shap2 > other_power:
             # if a coalition increases both utilities
@@ -54,7 +74,7 @@ class CoalitionHelper():
             coal_pref = \
                 ((agent_pref * agent_power + other_pref * other_power) /
                  (agent_power + other_power + 0.0000001))
-            return coal_power, pot_eu, coal_pref
+            return coal_power, coal_util, coal_pref
 
         return None, None, None
 
@@ -105,7 +125,6 @@ class CoalitionHelper():
             neighbor_list = self.get_neighbor(
                 self.agents, agent, model, neighbor_type)
             for other in neighbor_list:
-                # No point to check against itself`
                 coal_power, pot_eu, coal_pref = \
                     self.check_coalition(agent, other)
 
@@ -115,7 +134,7 @@ class CoalitionHelper():
                         pot_coal_dict[agent_id] = {
                             "other_id": id_of(other),
                             "coal_power": coal_power,
-                            "coal_eu": pot_eu,
+                            "coal_util": pot_eu,
                             "coal_pref": coal_pref
                         }
 
@@ -124,10 +143,10 @@ class CoalitionHelper():
                         add_pot_coal()
                     else:
                         pot_coal = pot_coal_dict[agent_id]
-                        if pot_coal["coal_eu"] < pot_eu:
+                        if pot_coal["coal_util"] < pot_eu:
                             # or coalition with higher expected util
                             add_pot_coal()
-                        elif (pot_coal["coal_eu"] == pot_eu and
+                        elif (pot_coal["coal_util"] == pot_eu and
                                 pot_coal["coal_pref"] > coal_pref):
                             # or coalition with same expected utility
                             # but with closer pref
@@ -154,7 +173,7 @@ class CoalitionHelper():
                     "id_1": agent_id,
                     "id_2": other_id,
                     "coal_power": coal_info["coal_power"],
-                    "coal_eu": coal_info["coal_eu"],
+                    "coal_util": coal_info["coal_util"],
                     "coal_pref": coal_info["coal_pref"],
                 })
                 # ! Note: We don't update agents attributes here
