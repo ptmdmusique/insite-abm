@@ -67,16 +67,23 @@ class CoalitionHelper():
         shap2 = 0.5 * (self.efficiency * other_util + inter_eu)
         coal_util = 0.5 * shap1 + 0.5 * shap2
 
-        if shap1 > agent_power and shap2 > other_power:
+        if shap1 > agent_util and shap2 > other_util:
             # if a coalition increases both utilities
             # then this coalition is good enough
             # Coalition preference
             coal_pref = \
                 ((agent_pref * agent_power + other_pref * other_power) /
                  (agent_power + other_power + 0.0000001))
-            return coal_power, coal_util, coal_pref
+            # return coal_power, coal_util, coal_pref
+            return {
+                "coal_power": coal_power,
+                "coal_util": coal_util,
+                "coal_pref": coal_pref,
+                "utility_1": shap1,
+                "utility_2": shap2,
+            }
 
-        return None, None, None
+        return None
 
     def get_neighbor(self, agent_list, agent, model=None, neighbor_type=0):
         """Generate list of neighbor of the "agent"
@@ -125,32 +132,29 @@ class CoalitionHelper():
             neighbor_list = self.get_neighbor(
                 self.agents, agent, model, neighbor_type)
             for other in neighbor_list:
-                coal_power, pot_eu, coal_pref = \
-                    self.check_coalition(agent, other)
+                coalition_result = self.check_coalition(agent, other)
+                coal_util = coalition_result['coal_util']
+                coal_pref = coalition_result['coal_pref']
 
                 # Coalition is good enough
-                if coal_power is not None:
+                if coalition_result is not None:
                     def add_pot_coal():
-                        pot_coal_dict[agent_id] = {
-                            "other_id": id_of(other),
-                            "coal_power": coal_power,
-                            "coal_util": pot_eu,
-                            "coal_pref": coal_pref
-                        }
+                        pot_coal_dict[agent_id] = {"other_id": id_of(other)}
+                        pot_coal_dict[agent_id].update(coalition_result)
 
                     # No possible mate yet
                     if agent_id not in pot_coal_dict:
                         add_pot_coal()
                     else:
                         pot_coal = pot_coal_dict[agent_id]
-                        if pot_coal["coal_util"] < pot_eu:
-                            # or coalition with higher expected util
-                            add_pot_coal()
-                        elif (pot_coal["coal_util"] == pot_eu and
-                                pot_coal["coal_pref"] > coal_pref):
-                            # or coalition with same expected utility
-                            # but with closer pref
-                            # that is: old coal pref > new coal pref
+                        # or coalition with higher expected util
+                        condition_1 = pot_coal["coal_util"] < coal_util
+                        # or coalition with same expected utility
+                        # but with closer pref
+                        # that is: old coal pref > new coal pref
+                        condition_2 = (pot_coal["coal_util"] == coal_util and
+                                       pot_coal["coal_pref"] > coal_pref)
+                        if condition_1 or condition_2:
                             add_pot_coal()
 
         # Check each possible coalition if both ends like the coalition
@@ -169,13 +173,20 @@ class CoalitionHelper():
                     and agent_id == other_coal_info['other_id']:
                 # If both coalition refer to each other
                 #   then we form a new coalition
-                coalition_list.append({
+                new_coalition = {
                     "id_1": agent_id,
                     "id_2": other_id,
-                    "coal_power": coal_info["coal_power"],
-                    "coal_util": coal_info["coal_util"],
-                    "coal_pref": coal_info["coal_pref"],
-                })
+                }
+                # Make sure to add other attributes too
+                new_coalition.update(coal_info)
+                # but remove the redundant key
+                new_coalition.pop('other_id')
+                coalition_list.append(new_coalition)
+
+                # ? worried that the utility_1 won't match with agent?
+                # ? no problem!
+                # ? Since coal_info comes with agent, problem is solved!
+
                 # ! Note: We don't update agents attributes here
                 # ! to avoid side effect
 
