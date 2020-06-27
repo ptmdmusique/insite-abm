@@ -21,6 +21,7 @@ outCSVPath = sys.argv[6]        # Path to csv out file
 outCitPath = sys.argv[7]        # Path to cit json out file
 outShapePath = sys.argv[8]      # Path to chosen cit geojson
 outCompactShapePath = sys.argv[9]      # Path to chosen cit geojson
+outOtherPath = sys.argv[9]      # Path to other information
 # Process:
 #   Read in cit geojson file
 #     Extract cit data and corresponding area shape
@@ -289,5 +290,9 @@ with open(outShapePath, 'w') as jsonFile:
 with open(outCompactShapePath, 'w') as jsonFile:
     json.dump(compactCitShape, jsonFile)
 
-# Return the new initial number for Java process to read
-print("initialNumber {}".format(len(rIndexList)))
+# For other information
+with open(outOtherPath, 'w') as jsonFile:
+    json.dump({
+        "actualNumCit": len(rIndexList),
+        "disruption": disruption
+    }, jsonFile)
