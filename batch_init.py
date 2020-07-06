@@ -1,6 +1,9 @@
-from initializer import analyze_input
 from os import path
+from pathlib import Path
+import shutil
 import numpy as np
+
+from initializer import analyze_input
 
 ''' Paramers and its corresponding value set/range used for batch running '''
 
@@ -82,14 +85,15 @@ model_batch_params = {
 }
 
 
-def get_path(key, type="input", file_name_suffix=None):
+def get_path(key, file_name_suffix=None, folder_path=None, type="ouptut"):
     # Get the joined path based on key
-    folder_path = PATHS['{}-folder'.format(type)]
     file_name = PATHS[key]
+    if folder_path is None:
+        folder_path = PATHS[f'{type}-folder']
     if file_name_suffix is not None:
-        file_name += file_name_suffix
-    ext = PATHS['{}-ext'.format(key)]
-    return path.join(folder_path, '{}.{}'.format(file_name, ext))
+        file_name += f'_{file_name_suffix}'
+    ext = PATHS[f'{key}-ext']
+    return path.join(folder_path, f'{file_name}.{ext}')
 
 
 def get_default_value(key):
@@ -99,58 +103,88 @@ def get_default_value(key):
         print('Encounting key error')
 
 
-default_meta_data = {
+default_meta_values = {
     # Number of cits we want to extract
     'initial_number': get_default_value('initial_numbers'),
     # Disruption
     'disruption': get_default_value('disruptions'),
     # Acceptable distance for cits (in km)
     'acceptable_range': get_default_value('acceptable_range'),
-    # Path to citizen shapefile
-    'cit_path': get_path('cit-in'),
-    # Path to route shapefile
-    'route_path': get_path('route-in'),
-    # Path to csv out file
-    'out_CSV_path': get_path('tick0', 'output'),
-    # Path to cit json out file
-    'out_cit_path': get_path('cit-coord', 'output'),
-    # Path to chosen cit geojson
-    'out_shape_path': get_path('cit-shape', 'output'),
-    # Path to chosen cit geojson with minimal info
-    'out_compact_path': get_path('cit-compact', 'output'),
-    # Path to other information
-    'out_meta_path': get_path('meta', 'output'),
 }
+# TODO: Clean this up
+# default_meta_paths = {
+#     # Path to citizen shapefile
+#     'cit_path': get_path('cit-in', type='input'),
+#     # Path to route shapefile
+#     'route_path': get_path('route-in', type='input'),
+#     # Path to csv out file
+#     'out_CSV_path': get_path('tick0'),
+#     # Path to cit json out file
+#     'out_cit_path': get_path('cit-coord'),
+#     # Path to chosen cit geojson
+#     'out_shape_path': get_path('cit-shape'),
+#     # Path to chosen cit geojson with minimal info
+#     'out_compact_path': get_path('cit-compact'),
+#     # Path to other information
+#     'out_meta_path': get_path('meta'),
+# }
 
+
+def run_initializer(key, counter, cur_batch_value):
+    # Run initializer with the current meta data
+    # Create new folder
+    out_folder = path.join(
+        PATHS['output-folder'], f"batch_{counter}")
+    Path(out_folder).mkdir(parents=True, exist_ok=True)
+
+    # Compute new file name and location
+    meta_paths = {
+        # Path to citizen shapefile
+        'cit_path': get_path('cit-in', type='input'),
+        # Path to route shapefile
+        'route_path': get_path('route-in', type='input'),
+        # Path to csv out file
+        'out_CSV_path': get_path('tick0', counter, out_folder),
+        # Path to cit json out file
+        'out_cit_path': get_path('cit-coord', counter, out_folder),
+        # Path to chosen cit geojson
+        'out_shape_path': get_path('cit-shape', counter, out_folder),
+        # Path to chosen cit geojson with minimal info
+        'out_compact_path': get_path('cit-compact', counter, out_folder),
+        # Path to other information
+        'out_meta_path': get_path('meta', counter, out_folder),
+    }
+
+    # Compute new meta data
+    meta_data = default_meta_values.copy()
+    meta_data[key] = cur_batch_value
+    meta_data.update(meta_paths)
+
+    # Run intializer
+    analyze_input(meta_data)
+
+
+# Clean up old folder
+print("---Cleaning up old folder---")
+shutil.rmtree(PATHS['output-folder'])
 
 # Run intializer
+print("---Running in batches---")
 counter = 0
 for key, value in initializer_batch_params.items():
+    print(f"Running batch for {key}")
     # Use the values list to get what to run next
-    print(key)
     if value['type'] == 'range':
         start = value['values'][0]
         step = value['values'][2]
         end = value['values'][1] + step
         for cur_batch_value in np.arange(start, end, step):
-            # Compute new file name
-            get_path('tick0', 'output', '_{}'.format(counter))
+            print(f'\twith value {cur_batch_value}')
+            run_initializer(key, counter, cur_batch_value)
             counter += 1
 
-            # Compute new meta data
-            meta_data = default_meta_data.copy()
-            meta_data[key] = cur_batch_value
-
-            # Run intializer
-            analyze_input(meta_data)
     elif value['type'] == 'set':
         for cur_batch_value in value['values']:
-            get_path('tick0', 'output', '_{}'.format(counter))
+            print(f'\twith value {cur_batch_value}')
+            run_initializer(key, counter, cur_batch_value)
             counter += 1
-
-            # Compute new meta data
-            meta_data = default_meta_data.copy()
-            meta_data[key] = cur_batch_value
-
-            # Run intializer
-            analyze_input(meta_data)
