@@ -9,19 +9,6 @@ from shapely.ops import nearest_points  # Geometric Operations
 
 import pandas as pd  # Dataframe
 
-# Initial parameters
-initialNumber = int(sys.argv[1])
-disruption = float(sys.argv[2])  # Disruption
-# Acceptable distance for cits (in km)
-acceptableRange = float(sys.argv[3])
-# Path
-citPath = sys.argv[4]           # Path to citizen shapefile
-routePath = sys.argv[5]         # Path to route shapefile
-outCSVPath = sys.argv[6]        # Path to csv out file
-outCitPath = sys.argv[7]        # Path to cit json out file
-outShapePath = sys.argv[8]      # Path to chosen cit geojson
-outCompactShapePath = sys.argv[9]      # Path to chosen cit geojson
-outOtherPath = sys.argv[9]      # Path to other information
 # Process:
 #   Read in cit geojson file
 #     Extract cit data and corresponding area shape
@@ -41,7 +28,7 @@ outOtherPath = sys.argv[9]      # Path to other information
 # https://gis.stackexchange.com/questions/11626/does-y-mean-latitude-and-x-mean-longitude-in-every-gis-software/11628
 
 
-def getDistanceBetweenCoords(origin, destination):
+def get_coord_distance(origin, destination):
     # Source: https://gist.github.com/rochacbruno/2883505
     lon1, lat1 = origin
     lon2, lat2 = destination
@@ -57,242 +44,300 @@ def getDistanceBetweenCoords(origin, destination):
     return d
 
 
-# Column info
-inputColumnHeaders = [
-    'id', 'blarea', 'bname', 'lattitude', 'longitude', 'ppower',
-    'density', 'census tract'
-]
-outputColumnHeaders = [
-    'id', 'xcor', 'ycor',
-    'own-pref', 'ideo', 'idatt', 'pref', 'tpreference',
-    'power', 'closest_distance', 'proximity', 'salience', 'im', 'ran',
-    'utility'
-]
+def analyze_input(meta_data):
+    # Column info
+    input_columns = [
+        'id', 'blarea', 'bname', 'lattitude', 'longitude', 'ppower',
+        'density', 'census tract'
+    ]
+    output_columns = [
+        'id', 'xcor', 'ycor',
+        'own-pref', 'ideo', 'idatt', 'pref', 'tpreference',
+        'power', 'closest_distance', 'proximity', 'salience', 'im', 'ran',
+        'utility'
+    ]
 
-# Keys
-keyList = [
-    ["ALAND"],
-    ["GEOID"],
-    ["INT", "LAT"],
-    # Since there is a mispell in 2010, this looks really weird...
-    ["INT", "ON"],
-    ["POWER"],
-    ["DENSITY"],
-    ["TRACTCE"]
-]
-# Read in cit geojson file
-citPropertyList = []
-citShapeList = []
-citShapeJSON = ""
-geoIDList = []
+    # Keys
+    key_list = [
+        ["ALAND"],
+        ["GEOID"],
+        ["INT", "LAT"],
+        # Since there is a mispell in 2010, this looks really weird...
+        ["INT", "ON"],
+        ["POWER"],
+        ["DENSITY"],
+        ["TRACTCE"]
+    ]
 
-with open(citPath) as jsonFile:
-    citShapeJSON = json.load(jsonFile)
-    citFeatures = citShapeJSON['features']
+    # Initial parameters
+    # Number of cits we want to extract
+    initial_number = meta_data['initial_number']
+    # Disruption
+    disruption = meta_data['disruption']
+    # Acceptable distance for cits (in km)
+    acceptable_range = meta_data['acceptable_range']
 
-    for feature in citFeatures:
-        citID = feature['id']
+    # Paths
+    # Path to citizen shapefile
+    cit_path = meta_data['cit_path']
+    # Path to route shapefile
+    route_path = meta_data['route_path']
+    # Path to csv out file
+    out_CSV_path = meta_data['out_CSV_path']
+    # Path to cit json out file
+    out_cit_path = meta_data['out_cit_path']
+    # Path to chosen cit geojson
+    out_shape_path = meta_data['out_shape_path']
+    # Path to chosen cit geojson with minimal info
+    out_compact_path = meta_data['out_compact_path']
+    # Path to other information
+    out_meta_path = meta_data['out_meta_path']
 
-        citShapeList.append({
-            "type": "Feature",
-            "id": int(citID),
-            "geometry": feature['geometry']
-        })
+    # Read in cit geojson file
+    cit_properties = []      # Storing all the properties
+    cit_shape_JSON = None       # Storing shape in JSON format
+    cit_shapes = []         # Storing shape information
+    geo_IDs = []            # List of all geo IDs
 
-        citProperty = {'id': citID}
-        # for key in ['ALAND10_NO',
-        #             'GEOID10_NO',
-        #             'INTPLAT10_',
-        #             'INTPLTON10',
-        #             'POWER_NO',
-        #             'DENSITY_SQ',
-        #             'TRACTCE10_']:
-        #     citProperty[key] = feature['properties'][key]
-        for key in keyList:
-            for propKey in feature['properties'].keys():
-                if propKey.startswith(key[0]):
-                    if (len(key) > 1 and key[1] in propKey) \
-                            or len(key) == 1:
-                        if key[0] == "GEOID":
-                            if "NO" not in propKey:
-                                citProperty[propKey] = feature['properties'][propKey]
-                                geoIDList.append(
-                                    feature['properties'][propKey])
-                        else:
-                            citProperty[propKey] = feature['properties'][propKey]
+    with open(cit_path) as json_file:
+        cit_shape_JSON = json.load(json_file)
+        cit_features = cit_shape_JSON['features']
 
-        citPropertyList.append(citProperty)
+        # Extract crucial information from the shape file
+        for feature in cit_features:
+            cit_ID = feature['id']
 
-# Initialize dataframe for input
-dfr = pd.DataFrame(data=[row.values()
-                         for row in citPropertyList],
-                   columns=inputColumnHeaders)
-dfr = dfr.apply(pd.to_numeric)  # Transform them into number
-# Get the list of coordinates and transform into points
-citPointList = [Point(i) for i in list(zip(dfr.longitude, dfr.lattitude))]
-idList = [id for id in dfr.id]
+            cit_shapes.append({
+                "type": "Feature",
+                "id": int(cit_ID),
+                "geometry": feature['geometry']
+            })
 
-# Also change the features list to just the chosen cits
-citShapeJSON['features'] = citShapeList
+            cit_property = {'id': cit_ID}
+            # for key in ['ALAND10_NO',
+            #             'GEOID10_NO',
+            #             'INTPLAT10_',
+            #             'INTPLTON10',
+            #             'POWER_NO',
+            #             'DENSITY_SQ',
+            #             'TRACTCE10_']:
+            #     citProperty[key] = feature['properties'][key]
+            for key in key_list:
+                for propKey in feature['properties'].keys():
+                    if propKey.startswith(key[0]):
+                        if (len(key) > 1 and key[1] in propKey) \
+                                or len(key) == 1:
+                            if key[0] == "GEOID":
+                                if "NO" not in propKey:
+                                    cit_property[propKey] = feature['properties'][propKey]
+                                    geo_IDs.append(
+                                        feature['properties'][propKey])
+                            else:
+                                cit_property[propKey] = feature['properties'][propKey]
 
-# Read in route geojson file
-routeList = []
-with open(routePath) as jsonFile:
-    jsonData = json.load(jsonFile)
-    routeFeatures = jsonData['features']
+            cit_properties.append(cit_property)
 
-    for feature in routeFeatures:
-        routeGeometry = feature['geometry']
+    # Initialize input dataframe
+    dfr = pd.DataFrame(data=[row.values()
+                             for row in cit_properties],
+                       columns=input_columns)
+    dfr = dfr.apply(pd.to_numeric)  # Transform them into number
+    # Get the list of coordinates and transform into points
+    cit_point_list = [Point(i)
+                      for i in list(zip(dfr.longitude, dfr.lattitude))]
+    ids = [id for id in dfr.id]
 
-        # 2 cases: Linestring, MultiLineString
-        geometryType = routeGeometry['type']
-        if (geometryType == "LineString"):
-            routeList.append(LineString(routeGeometry['coordinates']))
-        elif (geometryType == "MultiLineString"):
-            routeList.append(MultiLineString(routeGeometry['coordinates']))
+    # Also change the features list to just the chosen cits
+    cit_shape_JSON['features'] = cit_shapes
 
+    # Read in route geojson file
+    routes = []
+    with open(route_path) as json_file:
+        json_data = json.load(json_file)
+        route_features = json_data['features']
 
-# Find the shortest distance and nearest point for each cit to power line
-closestDistanceList = []  # List of shortest distance
-npList = []  # List of nearest points
-for point in citPointList:
-    curMinDist = float('Inf')
-    nearestLine = None
-    for line in routeList:
-        curDist = point.distance(line)
-        if curDist < curMinDist:
-            curMinDist = curDist
-            nearestLine = line
-    nearestPoint = nearest_points(nearestLine, point)[
-        0].coords[:][0]  # Find the nearest point
-    # Calculate the distance in real world km instead of Cartesian distance
-    closestDistanceList.append(getDistanceBetweenCoords(
-        nearestPoint, (point.x, point.y)))  # Store the shortest distance
-    # closestDistanceList.append(curMinDist)  # Store the shortest distance
-    npList.append((nearestPoint[0], nearestPoint[1]))  # Long first then Lat
+        for feature in route_features:
+            # Extract geometry of the route and create Shapely object out of it
+            route_geometry = feature['geometry']
 
+            # 2 cases: Linestring, MultiLineString
+            geometry_type = route_geometry['type']
+            if (geometry_type == "LineString"):
+                routes.append(LineString(route_geometry['coordinates']))
+            elif (geometry_type == "MultiLineString"):
+                routes.append(MultiLineString(
+                    route_geometry['coordinates']))
 
-# Initialize dataframe for output (tick 0)
-dfOut = pd.DataFrame(data=0,
-                     #  index=np.arange(initialNumber),
-                     index=np.arange(len(citPropertyList)),
-                     columns=outputColumnHeaders)
+    # Find the shortest distance and nearest point for each cit to power line
+    closest_distances = []  # List of shortest distance
+    np_list = []            # List of nearest points
+    for point in cit_point_list:
+        cur_min_dist = float('Inf')
+        nearest_line = None
 
-# Formula can be found at : http://jasss.soc.surrey.ac.uk/16/3/6.html
-# Append more columns into the dfOut dataframe
-# NOTE: xcor is longitude, ycor is lattitude
-dfOut[['id', 'xcor', 'ycor']] = dfr[['id', 'longitude', 'lattitude']].values
-dfOut['id'] = dfOut['id'].astype(int)
-# dfOut['ideo'] = np.random.normal(60, 10, initialNumber)
-dfOut['ideo'] = np.random.normal(60, 10, len(citPropertyList))
+        for line in routes:
+            curDist = point.distance(line)
+            if curDist < cur_min_dist:
+                cur_min_dist = curDist
+                nearest_line = line
+        nearest_point = nearest_points(nearest_line, point)[
+            0].coords[:][0]  # Find the nearest point
 
-# Generate random column
-dfOut['ran'] = dfOut.apply(lambda row: np.random.randint(100), axis=1)
+        # Calculate the distance in real world km instead of Cartesian distance
+        closest_distances.append(get_coord_distance(
+            nearest_point, (point.x, point.y)))  # Store the shortest distance
+        # closestDistanceList.append(curMinDist)  # Store the shortest distance
+        # Long first then Lat
+        np_list.append((nearest_point[0], nearest_point[1]))
 
-# Calculate idatt (3.5)
-dfOut['idatt'] = dfOut.apply(
-    lambda row: row['ideo'] * 0.9 + row['ran'] * 0.1, axis=1)
+    # Initialize dataframe for output (tick 0)
+    df_out = pd.DataFrame(data=0,
+                          #  index=np.arange(initialNumber),
+                          index=np.arange(len(cit_properties)),
+                          columns=output_columns)
 
-# Append the proximity column with the nearest point result array
-dfOut['closest_distance'] = closestDistanceList
-dfOut['proximity'] = dfOut.apply(
-    lambda row: 1 / row['closest_distance'], axis=1)
-dfOut['pref'] = dfOut.apply(lambda row: (
-    (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
+    # Formula can be found at : http://jasss.soc.surrey.ac.uk/16/3/6.html
+    # Append more columns into the dfOut dataframe
+    # NOTE: xcor is longitude, ycor is lattitude
+    df_out[['id', 'xcor', 'ycor']] = dfr[[
+        'id', 'longitude', 'lattitude']].values
+    df_out['id'] = df_out['id'].astype(int)
+    # dfOut['ideo'] = np.random.normal(60, 10, initialNumber)
+    df_out['ideo'] = np.random.normal(60, 10, len(cit_properties))
 
-# Power
-dfr['power'] = dfr.apply(lambda row: 2 * row['ppower'], axis=1)
-dfOut['own-power'] = dfOut['power'] = dfr['power'].values
+    # Generate random column
+    df_out['ran'] = df_out.apply(lambda row: np.random.randint(100), axis=1)
 
-dfOut['own-pref'] = dfOut.apply(lambda row: (
-    (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
-dfOut['utility'] = dfOut.apply(lambda row: (
-    100 - abs(row['own-pref'] - row['own-pref'])) * row['own-power'], axis=1)
+    # Calculate idatt (3.5)
+    df_out['idatt'] = df_out.apply(
+        lambda row: row['ideo'] * 0.9 + row['ran'] * 0.1, axis=1)
 
-dfOut['salience'] = dfOut.apply(
-    lambda row: disruption * row['proximity'], axis=1)
+    # Append the proximity column with the nearest point result array
+    df_out['closest_distance'] = closest_distances
+    df_out['proximity'] = df_out.apply(
+        lambda row: 1 / row['closest_distance'], axis=1)
+    df_out['pref'] = df_out.apply(lambda row: (
+        (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
 
-dfOut['im'] = dfOut.apply(lambda row:
-                          (row['pref'] * row['power'] *
-                           row['salience'] * 0.9 + row['ran'] * 0.1)
-                          * 1.2 / (200 * 1.5), axis=1)
+    # Power
+    dfr['power'] = dfr.apply(lambda row: 2 * row['ppower'], axis=1)
+    df_out['own-power'] = df_out['power'] = dfr['power'].values
 
-dfOut['tpreference'] = dfOut.apply(
-    lambda row: row['pref'] * row['salience'], axis=1)
+    df_out['own-pref'] = df_out.apply(lambda row: (
+        (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
+    df_out['utility'] = df_out.apply(lambda row: (
+        100 - abs(row['own-pref'] - row['own-pref'])) * row['own-power'], axis=1)
 
+    df_out['salience'] = df_out.apply(
+        lambda row: disruption * row['proximity'], axis=1)
 
-# Then we filter out only the cit within acceptable range
-dfOut = dfOut.sort_values(by=['closest_distance'])
-dfOut = dfOut.reset_index(drop=True)  # Reset the index
-# Convert acceptable range distance from km to degree: 111km ~ 1 degree
-#  https://www.longitudestore.com/how-big-is-one-gps-degree.html
-acceptableRange /= 111
-# Get the index of the first cit that is out of range
-# (we don't just filter because the <initialNumber> might be bigger
-#   than the size of the list of filtered cits)
-maxIndx = dfOut[['proximity']].gt(acceptableRange).idxmax().tolist()[0]
+    df_out['im'] = df_out.apply(lambda row:
+                                (row['pref'] * row['power'] *
+                                 row['salience'] * 0.9 + row['ran'] * 0.1)
+                                * 1.2 / (200 * 1.5), axis=1)
 
-# 3 cases:
-'''
-    1. not found (maxIndx = 0) or maxIndex is the first row (= 0, same meaning as not found)
-    => choose randomly between 0 and len(dfOut) <initialNumber> number of citizen
-    2. found and:
-        a. maxIndx <= initialNumber:
-        => choose first maxIndx rows, ignore the rest
-        b. maxIndx > initialNumber:
-        => choose randomly among the first maxIndx rows
-'''
+    df_out['tpreference'] = df_out.apply(
+        lambda row: row['pref'] * row['salience'], axis=1)
 
-# Randomly generate a list of number that will
-#   act as the index for the data to take from input
-rIndexList = ()
-if maxIndx == 0:
-    rIndexList = np.array(sample(range(len(dfOut)), initialNumber))
-else:
-    if maxIndx <= initialNumber:
-        rIndexList = list(range(maxIndx))
+    # Then we filter out only the cit within acceptable range
+    df_out = df_out.sort_values(by=['closest_distance'])
+    df_out = df_out.reset_index(drop=True)  # Reset the index
+    # Convert acceptable range distance from km to degree: 111km ~ 1 degree
+    #  https://www.longitudestore.com/how-big-is-one-gps-degree.html
+    acceptable_range /= 111
+    # Get the index of the first cit that is out of range
+    # (we don't just filter because the <initialNumber> might be bigger
+    #   than the size of the list of filtered cits)
+    max_indx = df_out[['proximity']].gt(acceptable_range).idxmax().tolist()[0]
+
+    # 3 cases:
+    '''
+        1. not found (maxIndx = 0) or maxIndex is the first row (= 0, same meaning as not found)
+        => choose randomly between 0 and len(dfOut) <initialNumber> number of citizen
+        2. found and:
+            a. maxIndx <= initialNumber:
+            => choose first maxIndx rows, ignore the rest
+            b. maxIndx > initialNumber:
+            => choose randomly among the first maxIndx rows
+    '''
+
+    # Randomly generate a list of number that will
+    #   act as the index for the data to take from input
+    random_indices = ()
+    if max_indx == 0:
+        random_indices = np.array(sample(range(len(df_out)), initial_number))
     else:
-        rIndexList = np.array(sample(range(maxIndx), initialNumber))
-# Get only the elements with chosen indices
-dfOut = dfOut.iloc[rIndexList]
+        if max_indx <= initial_number:
+            random_indices = list(range(max_indx))
+        else:
+            random_indices = np.array(sample(range(max_indx), initial_number))
+    # Get only the elements with chosen indices
+    df_out = df_out.iloc[random_indices]
 
-# Filter the shapeList and keep only those we have in the idList
-compactCitShape = {shape['id']: shape['geometry']
-                   for shape in citShapeList if shape['id'] in dfOut['id'].values}
+    # Filter the shapeList and keep only those we have in the idList
+    compact_cit_shape = {shape['id']: shape['geometry']
+                         for shape in cit_shapes if shape['id'] in df_out['id'].values}
 
-# Output to file
-# Tick for further processing
-with open(outCSVPath, 'w+') as outFile:
-    outFile.write("\n\n\n\n\n\n\n\n\n\n\n\n")
-    dfOut.to_csv(outFile, index=False)
-    outFile.close()
+    # Output to file
+    # Tick for further processing
+    with open(out_CSV_path, 'w+') as json_file:
+        json_file.write("\n\n\n\n\n\n\n\n\n\n\n\n")
+        df_out.to_csv(json_file, index=False)
+        json_file.close()
+
+    with open(out_cit_path, 'w') as json_file:
+        writeList = []
+        for index in range(0, len(cit_point_list)):
+            curPoint = cit_point_list[index].coords[:][0]
+            writeList.append({
+                # Lng first then lat
+                "geoid": geo_IDs[index],
+                "id": ids[index],
+                "myCoord": [curPoint[0], curPoint[1]],
+                "npCoord": np_list[index]
+            })
+        # Write to file
+        json.dump(writeList, json_file)
+
+    # For heatmap
+    with open(out_shape_path, 'w') as json_file:
+        json.dump(cit_shape_JSON, json_file)
+
+    # For heatmap
+    with open(out_compact_path, 'w') as json_file:
+        json.dump(compact_cit_shape, json_file)
+
+    # For other information
+    with open(out_meta_path, 'w') as json_file:
+        json.dump({
+            "actualNumCit": len(random_indices),
+            "disruption": disruption
+        }, json_file)
 
 
-with open(outCitPath, 'w') as jsonFile:
-    writeList = []
-    for index in range(0, len(citPointList)):
-        curPoint = citPointList[index].coords[:][0]
-        writeList.append({
-            # Lng first then lat
-            "geoid": geoIDList[index],
-            "id": idList[index],
-            "myCoord": [curPoint[0], curPoint[1]],
-            "npCoord": npList[index]
-        })
-    # Write to file
-    json.dump(writeList, jsonFile)
+if __name__ == '__main__':
+    # Initial parameters
+    meta_data = {
+        # Number of cits we want to extract
+        'initial_number': int(sys.argv[1]),
+        # Disruption
+        'disruption': float(sys.argv[2]),
+        # Acceptable distance for cits (in km)
+        'acceptable_range': float(sys.argv[3]),
+        # Path to citizen shapefile
+        'cit_path': sys.argv[4],
+        # Path to route shapefile
+        'route_path': sys.argv[5],
+        # Path to csv out file
+        'out_CSV_path': sys.argv[6],
+        # Path to cit json out file
+        'out_cit_path': sys.argv[7],
+        # Path to chosen cit geojson
+        'out_shape_path': sys.argv[8],
+        # Path to chosen cit geojson with minimal info
+        'out_compact_path': sys.argv[9],
+        # Path to other information
+        'out_meta_path': sys.argv[10],
+    }
 
-# For heatmap
-with open(outShapePath, 'w') as jsonFile:
-    json.dump(citShapeJSON, jsonFile)
-
-# For heatmap
-with open(outCompactShapePath, 'w') as jsonFile:
-    json.dump(compactCitShape, jsonFile)
-
-# For other information
-with open(outOtherPath, 'w') as jsonFile:
-    json.dump({
-        "actualNumCit": len(rIndexList),
-        "disruption": disruption
-    }, jsonFile)
+    analyze_input(meta_data)

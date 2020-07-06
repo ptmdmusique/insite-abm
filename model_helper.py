@@ -133,14 +133,14 @@ class CoalitionHelper():
                 self.agents, agent, model, neighbor_type)
             for other in neighbor_list:
                 coalition_result = self.check_coalition(agent, other)
-                coal_util = coalition_result['coal_util']
-                coal_pref = coalition_result['coal_pref']
 
                 # Coalition is good enough
                 if coalition_result is not None:
                     def add_pot_coal():
                         pot_coal_dict[agent_id] = {"other_id": id_of(other)}
                         pot_coal_dict[agent_id].update(coalition_result)
+                    coal_util = coalition_result['coal_util']
+                    coal_pref = coalition_result['coal_pref']
 
                     # No possible mate yet
                     if agent_id not in pot_coal_dict:
