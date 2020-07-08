@@ -76,6 +76,9 @@ def analyze_input(meta_data):
     disruption = meta_data['disruption']
     # Acceptable distance for cits (in km)
     acceptable_range = meta_data['acceptable_range']
+    # Misc data
+    talk_span = meta_data['talk_span']
+    NGO_message = meta_data['NGO_message']
 
     # Paths
     # Path to citizen shapefile
@@ -216,8 +219,11 @@ def analyze_input(meta_data):
     df_out['closest_distance'] = closest_distances
     df_out['proximity'] = df_out.apply(
         lambda row: 1 / row['closest_distance'], axis=1)
+    # TODO: DOUBLE CHECK THIS
     df_out['pref'] = df_out.apply(lambda row: (
         (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
+    # df_out['pref'] = df_out.apply(lambda row: (
+        # (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
 
     # Power
     dfr['power'] = dfr.apply(lambda row: 2 * row['ppower'], axis=1)
@@ -310,8 +316,10 @@ def analyze_input(meta_data):
     # For other information
     with open(out_meta_path, 'w') as json_file:
         json.dump({
-            "actualNumCit": len(random_indices),
-            "disruption": disruption
+            "actual_num_cit": len(random_indices),
+            "disruption": disruption,
+            "talk_span": talk_span,
+            "NGO_message": NGO_message,
         }, json_file)
 
 
@@ -324,20 +332,25 @@ if __name__ == '__main__':
         'disruption': float(sys.argv[2]),
         # Acceptable distance for cits (in km)
         'acceptable_range': float(sys.argv[3]),
+        # Other parameters
+        'talk_span': float(sys.argv[4]),
+        'NGO_message': float(sys.argv[5]),
+
+        # Paths
         # Path to citizen shapefile
-        'cit_path': sys.argv[4],
+        'cit_path': sys.argv[6],
         # Path to route shapefile
-        'route_path': sys.argv[5],
+        'route_path': sys.argv[7],
         # Path to csv out file
-        'out_CSV_path': sys.argv[6],
+        'out_CSV_path': sys.argv[8],
         # Path to cit json out file
-        'out_cit_path': sys.argv[7],
+        'out_cit_path': sys.argv[9],
         # Path to chosen cit geojson
-        'out_shape_path': sys.argv[8],
+        'out_shape_path': sys.argv[10],
         # Path to chosen cit geojson with minimal info
-        'out_compact_path': sys.argv[9],
+        'out_compact_path': sys.argv[11],
         # Path to other information
-        'out_meta_path': sys.argv[10],
+        'out_meta_path': sys.argv[12],
     }
 
     analyze_input(meta_data)
