@@ -31,7 +31,8 @@ class CitAgent(GeoAgent):
         # Update attributes every step after coalitions are formed
         if self.coalition is not None:
             # If the agent is in a coalition
-            self.pref = self.coalition['coal_pref']
+            # self.pref = self.coalition['coal_pref']
+            setattr(self, "own-pref", self.coalition['coal_pref'])
 
             if self.unique_id == self.coalition['id_1']:
                 self.utility = self.coalition['utility_1']
@@ -44,20 +45,25 @@ class CitAgent(GeoAgent):
             self.cbo_power = self.coalition['coal_power']
             self.cbo_pref = self.coalition['coal_pref']
 
-            self.salience = self.disruption * self.proximity * self.type
             self.power *= 1.5
         else:
             # Else just reset the type
             self.type = 1
 
+        # Update the salience based on cits' type
+        # (CBO or not CBO, that's the question)
+        self.salience = self.disruption * self.proximity * self.type
+
         ''' utility-info '''
         # Generate a random number in [0, 0.05]
-        NGO_message = 1  # TODO: Should be taken from user input
         random_float = np.random.random() * 0.05
-        self.idatt = (1 + random_float) * (self.idatt + NGO_message * 0.01)
+        self.idatt = (1 + random_float) * \
+            (self.idatt + self.NGO_message * 0.01)
+        # self.idatt = min(max(self.idatt, 0), 100) # Cap between 100 and 0
 
         ''' Other '''
         self.pref = ((self.proximity * 100) + self.idatt) / 2
+        # self.pref = min(max(self.pref, 0), 100) # Cap between 100 and 0
         self.tpreference = self.pref * self.salience
 
         val_1 = self.pref * self.power * self.salience * 0.9

@@ -1,5 +1,6 @@
 from operator import attrgetter
 from functools import reduce
+import pprint
 # REFERENCE: https://github.com/tpike3/bilateralshapley
 
 
@@ -8,6 +9,8 @@ class ModelCalculator():
     def compute_total(attribute):
         def helper(model):
             def reducer(accum, agent):
+                # if attribute == "utility" and getattr(agent, attribute) > 200:
+                #     print(accum, getattr(agent, attribute))
                 return accum + getattr(agent, attribute)
 
             agents = model.schedule.agents
@@ -17,6 +20,7 @@ class ModelCalculator():
 
 
 class CoalitionHelper():
+    flag = 0
     '''Helper to form coalitions for agents'''
 
     def __init__(self, agents, id_key, power_key, pref_key, util_key,
@@ -65,7 +69,17 @@ class CoalitionHelper():
         # shap2 = 0.5 * (other_power + (inter_eu - agent_power))
         shap1 = 0.5 * (self.efficiency * agent_util + inter_eu)
         shap2 = 0.5 * (self.efficiency * other_util + inter_eu)
-        coal_util = 0.5 * shap1 + 0.5 * shap2
+        # coal_util = 0.5 * shap1 + 0.5 * shap2
+        coal_util = 0.5 * ((agent_util + inter_eu) + (other_util + inter_eu))
+
+        # if (shap1 > 5000 or shap2 > 5000) and CoalitionHelper.flag < 5:
+        #     CoalitionHelper.flag += 1
+        #     pp = pprint.PrettyPrinter(indent=4)
+        #     print(shap1, agent_util, inter_eu)
+        #     print(shap2, other_util, inter_eu)
+        #     pp.pprint(vars(agent))
+        #     pp.pprint(vars(other))
+        #     print("\n\n\n\n\n\n\n\n")
 
         if shap1 > agent_util and shap2 > other_util:
             # if a coalition increases both utilities
@@ -74,7 +88,7 @@ class CoalitionHelper():
             coal_pref = \
                 ((agent_pref * agent_power + other_pref * other_power) /
                  (agent_power + other_power + 0.0000001))
-            # return coal_power, coal_util, coal_pref
+
             return {
                 "coal_power": coal_power,
                 "coal_util": coal_util,

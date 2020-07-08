@@ -23,7 +23,12 @@ class NetLogoModel(Model):
         self.schedule = BaseScheduler(self)
         self.agents = agent_list.to_dict(orient='records')
         self.efficiency_parameter = efficiency_parameter
+
+        # Other info
+        self.talk_span = other_data['talk_span']
+        self.total_cit = other_data['actual_num_cit']
         disruption = other_data['disruption']
+        NGO_message = other_data['NGO_message']
 
         # For performance issue
         #   we use dict for fast lookup and modification
@@ -44,9 +49,10 @@ class NetLogoModel(Model):
             # ? Is this a good solution?
             attr_list = agent_attr.copy()   # Make a copy to avoid side-effect
             # TODO: Check whether we should normalize stuff here
-            attr_list['pref'] = attr_list['pref'] / max_pref * 100
+            # attr_list['pref'] = attr_list['pref'] / max_pref * 100
 
             attr_list['disruption'] = disruption
+            attr_list['NGO_message'] = NGO_message
             attr_list['efficiency_parameter'] = efficiency_parameter
 
             # Then create an agent out of those
@@ -61,14 +67,23 @@ class NetLogoModel(Model):
         self.datacollector = DataCollector(
             model_reporters={"Total preference":
                              ModelCalculator.compute_total("pref"),
+                             "Total own preference":
+                             ModelCalculator.compute_total("own-pref"),
                              "Total utility":
                              ModelCalculator.compute_total("utility"),
                              "Total salient preference":
-                             ModelCalculator.compute_total("tpreference")
+                             ModelCalculator.compute_total("tpreference"),
+                             "Idatt":
+                             ModelCalculator.compute_total("idatt"),
+                             "Total influence message":
+                             ModelCalculator.compute_total("im"),
                              },
             agent_reporters={"Preference": "pref",
                              "Utility": "utility",
                              "Salient preference": "tpreference",
+                             "Idatt": "idatt",
+                             "Influence message": "im",
+                             "Own pref": "own-pref"
                              }
         )
 
@@ -82,20 +97,22 @@ class NetLogoModel(Model):
         if self.verbose:
             print("STARTING tick {}".format(self.schedule.steps))
 
+        # Reset citizen's type
+        for agent in self.schedule.agents:
+            # Set the coalition that this citizen is in in this tick
+            setattr(agent, "coalition", None)
+
         # Forming coalition
         coalition_helper = CoalitionHelper(
-            self.schedule.agents, "unique_id", "power", "pref", "utility", self.efficiency_parameter)
+            self.schedule.agents,
+            "unique_id", "power", "own-pref", "utility",
+            self.efficiency_parameter)
         coalition_list = coalition_helper.form_coalition(self, neighbor_type=0)
 
         if self.verbose:
             print("List of all coalition: ")
             pp.pprint(coalition_list)
             print("")
-
-        # Reset citizen's type
-        for agent in self.schedule.agents:
-            # Set the coalition that this citizen is in in this tick
-            setattr(agent, "coalition", None)
 
         # Update the coalition of all eligible agent
         for coalition in coalition_list:
