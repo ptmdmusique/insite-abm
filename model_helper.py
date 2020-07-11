@@ -24,7 +24,7 @@ class CoalitionHelper():
     '''Helper to form coalitions for agents'''
 
     def __init__(self, agents, id_key, power_key, pref_key, util_key,
-                 efficiency_parameter=1.5):
+                 efficiency_parameter=1.5, log_level=0):
         """Initialize coalition helper
 
         Args:
@@ -44,6 +44,7 @@ class CoalitionHelper():
         self.pref_key = pref_key
         self.util_key = util_key
         self.efficiency = efficiency_parameter
+        self.log_level = log_level
 
     def check_coalition(self, agent, other):
         # Condition to form coalition:
@@ -65,23 +66,14 @@ class CoalitionHelper():
 
         # Determine bilateral shapley value for both agents
         # TODO: Check whether we should use power or expected utility
-        # shap1 = 0.5 * (agent_power + (inter_eu - other_power))
-        # shap2 = 0.5 * (other_power + (inter_eu - agent_power))
-        shap1 = 0.5 * (self.efficiency * agent_util + inter_eu)
-        shap2 = 0.5 * (self.efficiency * other_util + inter_eu)
+        # cbo_eu_1 = 0.5 * (agent_power + (inter_eu - other_power))
+        # cbo_eu_2 = 0.5 * (other_power + (inter_eu - agent_power))
+        cbo_eu_1 = 0.5 * (self.efficiency * agent_util + inter_eu)  # Shapley 1
+        cbo_eu_2 = 0.5 * (self.efficiency * other_util + inter_eu)  # Shapley 2
         # coal_util = 0.5 * shap1 + 0.5 * shap2
         coal_util = 0.5 * ((agent_util + inter_eu) + (other_util + inter_eu))
 
-        # if (shap1 > 5000 or shap2 > 5000) and CoalitionHelper.flag < 5:
-        #     CoalitionHelper.flag += 1
-        #     pp = pprint.PrettyPrinter(indent=4)
-        #     print(shap1, agent_util, inter_eu)
-        #     print(shap2, other_util, inter_eu)
-        #     pp.pprint(vars(agent))
-        #     pp.pprint(vars(other))
-        #     print("\n\n\n\n\n\n\n\n")
-
-        if shap1 > agent_util and shap2 > other_util:
+        if cbo_eu_1 >= agent_util and cbo_eu_2 > other_util:
             # if a coalition increases both utilities
             # then this coalition is good enough
             # Coalition preference
@@ -89,17 +81,32 @@ class CoalitionHelper():
                 ((agent_pref * agent_power + other_pref * other_power) /
                  (agent_power + other_power + 0.0000001))
 
+            # if CoalitionHelper.flag < 5:
+            #     CoalitionHelper.flag += 1
+            #     # pp = pprint.PrettyPrinter(indent=4)
+            #     # print(shap1, agent_util, inter_eu)
+            #     # print(shap2, other_util, inter_eu)
+            #     # pp.pprint(vars(agent))
+            #     # pp.pprint(vars(other))
+            #     print(agent_power, agent_pref, other_power, other_pref, flush=True)
+            #     print((agent_pref * agent_power + other_pref * other_power), flush=True)
+            #     print((agent_power + other_power + 0.0000001), flush=True)
+            #     print(coal_pref, flush=True)
+            #     print("\n", flush=True)
+            # print("\n\n\n\n\n\n\n\n")
+
             return {
                 "coal_power": coal_power,
                 "coal_util": coal_util,
                 "coal_pref": coal_pref,
-                "utility_1": shap1,
-                "utility_2": shap2,
+                "utility_1": cbo_eu_1,
+                "utility_2": cbo_eu_2,
             }
 
         return None
 
-    def get_neighbor(self, agent_list, agent, model=None, neighbor_type=0):
+    def get_neighbor(self, agent_list, agent, model=None,
+                     neighbor_type=0, talk_span=0):
         """Generate list of neighbor of the "agent"
 
         Args:
@@ -109,28 +116,45 @@ class CoalitionHelper():
                 0: treats all cits as neighbor
                 1: direct neighbor
                 2: small world network # TODO
+                3: talk span in km
                 (default: {0})
         """
+        pp = pprint.PrettyPrinter(indent=2)
+        if self.log_level >= 2:
+            print(f"Getting neightbor list, type {neighbor_type}", flush=True)
+
         if neighbor_type == 0:
-            # Make a copy of the old list and remove the
-            #   instance of the agent in that list
-            new_list = agent_list[:]
-            new_list.pop(agent_list.index(agent))
-            return new_list
+            # Make a copy of the old list
+            neightbor_list = agent_list[:]
         if neighbor_type == 1:
             # ! Make sure this is an mesa_geo model!
-            return model.get_neighbors(agent)
+            neightbor_list = model.grid.get_neighbors(agent)
+        if neighbor_type == 3:
+            neightbor_list = model.grid.get_neighbors_within_distance(
+                agent, talk_span)
 
-    def form_coalition(self, model=None, neighbor_type=0):
+        if self.log_level >= 3:
+            print("Got result: ", flush=True)
+            pp.pprint(neightbor_list)
+
+        return neightbor_list
+
+    def form_coalition(self, model=None,
+                       neighbor_type=0, talk_span=0):
         """Return a list of coalition from given agent list
         Args:
             model {Object} -- Mesa model object {default: {None}}
             neighbor_type {int} -- type of neightbor to get for each cit
                 0: treats all cits as neighbor
                 1: direct neighbor
-                2: small world network
+                2: small world network # TODO
+                3: talk span in km
                 (default: {0})
         """
+
+        pp = pprint.PrettyPrinter(indent=2)
+        if self.log_level >= 2:
+            print("Gathering potential coalitions", flush=True)
 
         # Map of potential coalition of each agent where
         #   key: agent_id
@@ -144,8 +168,11 @@ class CoalitionHelper():
             # Check from one agent to another
             agent_id = id_of(agent)
             neighbor_list = self.get_neighbor(
-                self.agents, agent, model, neighbor_type)
+                self.agents, agent, model, neighbor_type, talk_span)
+
             for other in neighbor_list:
+                if id_of(other) == id_of(agent):
+                    continue
                 coalition_result = self.check_coalition(agent, other)
 
                 # Coalition is good enough
@@ -153,6 +180,7 @@ class CoalitionHelper():
                     def add_pot_coal():
                         pot_coal_dict[agent_id] = {"other_id": id_of(other)}
                         pot_coal_dict[agent_id].update(coalition_result)
+
                     coal_util = coalition_result['coal_util']
                     coal_pref = coalition_result['coal_pref']
 
@@ -170,6 +198,13 @@ class CoalitionHelper():
                                        pot_coal["coal_pref"] > coal_pref)
                         if condition_1 or condition_2:
                             add_pot_coal()
+
+        if self.log_level >= 3:
+            print("Potential coalition list", flush=True)
+            pp.pprint(pot_coal_dict)
+
+        if self.log_level >= 2:
+            print("Forming coalitions", flush=True)
 
         # Check each possible coalition if both ends like the coalition
         coalition_list = []
@@ -209,5 +244,8 @@ class CoalitionHelper():
                 # ? This only works if an agent can't be in
                 # ? more than 1 coalition
                 formed_list += [agent_id, other_id]
+
+        if self.log_level >= 2:
+            print("Finish forming coalitions, returning", flush=True)
 
         return coalition_list

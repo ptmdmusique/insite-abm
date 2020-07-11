@@ -15,8 +15,11 @@ class NetLogoModel(Model):
     """A model with some number of agents."""
 
     def __init__(self, agent_list, geojson_list, other_data,
-                 efficiency_parameter=1.5, verbose=False):
-        self.verbose = verbose
+                 efficiency_parameter=1.5, log_level=0):
+        self.log_level = log_level
+
+        if self.log_level >= 2:
+            print("Initializing model")
 
         # Initialize the schedule
         self.grid = GeoSpace(crs={"init": "epsg:4326"})
@@ -25,7 +28,7 @@ class NetLogoModel(Model):
         self.efficiency_parameter = efficiency_parameter
 
         # Other info
-        self.talk_span = other_data['talk_span']
+        self.talk_span = other_data['talk_span'] * 1000  # * 1000 for km to m
         self.total_cit = other_data['actual_num_cit']
         disruption = other_data['disruption']
         NGO_message = other_data['NGO_message']
@@ -35,7 +38,10 @@ class NetLogoModel(Model):
         self.agent_dict = {}
 
         # Get the max preference to normalize it
-        max_pref = agent_list['pref'].max()
+        # max_pref = agent_list['pref'].max()
+
+        if self.log_level >= 2:
+            print("Initializing agents")
 
         # Create agents
         for agent_attr in self.agents:
@@ -62,6 +68,9 @@ class NetLogoModel(Model):
 
             # Add the reference to that agent
             self.agent_dict[agent_attr['id']] = agent
+
+        if self.log_level >= 2:
+            print("Initializing data collectors")
 
         # Set up data collector
         self.datacollector = DataCollector(
@@ -94,25 +103,34 @@ class NetLogoModel(Model):
     def step(self):
         pp = pprint.PrettyPrinter(indent=4)
 
-        if self.verbose:
-            print("STARTING tick {}".format(self.schedule.steps))
+        if self.log_level >= 1:
+            print("STARTING tick {}".format(self.schedule.steps), flush=True)
+
+        if self.log_level >= 2:
+            print("Restting agents", flush=True)
 
         # Reset citizen's type
         for agent in self.schedule.agents:
             # Set the coalition that this citizen is in in this tick
             setattr(agent, "coalition", None)
 
+        if self.log_level >= 2:
+            print("Sending messages for potential coalitions", flush=True)
+
         # Forming coalition
         coalition_helper = CoalitionHelper(
             self.schedule.agents,
             "unique_id", "power", "own-pref", "utility",
             self.efficiency_parameter)
-        coalition_list = coalition_helper.form_coalition(self, neighbor_type=0)
+        coalition_list = coalition_helper.form_coalition(
+            self, neighbor_type=3, talk_span=self.talk_span)
 
-        if self.verbose:
-            print("List of all coalition: ")
+        if self.log_level >= 3:
+            print("List of all coalition: ", flush=True)
             pp.pprint(coalition_list)
-            print("")
+
+        if self.log_level >= 2:
+            print("Setting agents' coalition list", flush=True)
 
         # Update the coalition of all eligible agent
         for coalition in coalition_list:
@@ -121,11 +139,17 @@ class NetLogoModel(Model):
             setattr(agent_1, "coalition", coalition)
             setattr(agent_2, "coalition", coalition)
 
+        if self.log_level >= 2:
+            print("Agents start stepping", flush=True)
+
         # Advance the model by one step
         self.schedule.step()
+
+        if self.log_level >= 2:
+            print("Collecting data", flush=True)
 
         # Collect stats
         self.datacollector.collect(self)
 
-        if self.verbose:
-            print("ENDING tick {}\n".format(self.schedule.steps))
+        if self.log_level >= 1:
+            print("ENDING tick {}\n".format(self.schedule.steps), flush=True)

@@ -22,16 +22,16 @@ def read_JSON(path):
         return json.load(jsonFile)
 
 
-def run_with_timer(func, purpose, verbose=True):
+def run_with_timer(func, purpose, log_level=0):
     print(f'---{purpose}---', flush=True)
 
     start_time = time.time()
-    if verbose:
+    if log_level >= 1:
         print(f"~~~Start time: {start_time}", flush=True)
 
-    result = func()
+    result = func(log_level=log_level)
 
-    if verbose:
+    if log_level >= 1:
         print(f"~~~End time: {time.time()}", flush=True)
         print(f'~~~Time taken: {time.time() - start_time}', flush=True)
         print(f'==={purpose}===\n', flush=True)
@@ -45,7 +45,7 @@ def main():
     OTHER_DATA_PATH = "data/other-data.json"
     TOTAL_TICKS = 26
 
-    def drive_model():
+    def drive_model(log_level=0):
         '''LOADING DATA'''
         # Load in the data file then pass it into the model
         """Note:
@@ -66,14 +66,15 @@ def main():
         # Load in and run the model
         netlogo_model = NetLogoModel(
             agent_list, cit_geojson, other_data,
-            verbose=False)
+            log_level=log_level)
         for _ in range(TOTAL_TICKS):
             netlogo_model.step()
 
         return netlogo_model
 
     # Drive the model!
-    netlogo_model = run_with_timer(drive_model, "Running Netlogo model")
+    netlogo_model = run_with_timer(
+        drive_model, "Running Netlogo model", 3)
 
     '''PLOTTING RESULT'''
     model_data = netlogo_model.datacollector.get_model_vars_dataframe()
