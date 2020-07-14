@@ -223,7 +223,7 @@ def analyze_input(meta_data):
     df_out['pref'] = df_out.apply(lambda row: (
         (disruption * row['proximity'] * 100) + row['idatt']) / 2, axis=1)
     # df_out['pref'] = df_out.apply(lambda row: (
-        # (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
+    # (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
 
     # Power
     dfr['power'] = dfr.apply(lambda row: 2 * row['ppower'], axis=1)
@@ -231,8 +231,8 @@ def analyze_input(meta_data):
 
     df_out['own-pref'] = df_out.apply(lambda row: (
         (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
-    df_out['utility'] = df_out.apply(lambda row: (
-        100 - abs(row['own-pref'] - row['own-pref'])) * row['own-power'], axis=1)
+    df_out['utility'] = df_out.apply(
+        lambda row: 100 * row['own-power'], axis=1)
 
     df_out['salience'] = df_out.apply(
         lambda row: disruption * row['proximity'], axis=1)

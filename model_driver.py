@@ -66,6 +66,8 @@ def main():
         # Load in and run the model
         netlogo_model = NetLogoModel(
             agent_list, cit_geojson, other_data,
+            neighbor_type=0,
+            efficiency_parameter=1.25,
             log_level=log_level)
         for _ in range(TOTAL_TICKS):
             netlogo_model.step()
@@ -74,7 +76,8 @@ def main():
 
     # Drive the model!
     netlogo_model = run_with_timer(
-        drive_model, "Running Netlogo model", 3)
+        drive_model, "Running Netlogo model",
+        log_level=0)
 
     '''PLOTTING RESULT'''
     model_data = netlogo_model.datacollector.get_model_vars_dataframe()

@@ -5,6 +5,7 @@ from mesa_geo import GeoSpace
 from shapely.geometry import Polygon
 # Statistics and loggings
 from mesa.datacollection import DataCollector
+from geopy import distance
 import pprint
 # Custom libraries
 from cit_agent import CitAgent
@@ -15,6 +16,7 @@ class NetLogoModel(Model):
     """A model with some number of agents."""
 
     def __init__(self, agent_list, geojson_list, other_data,
+                 neighbor_type=0,
                  efficiency_parameter=1.5, log_level=0):
         self.log_level = log_level
 
@@ -28,10 +30,12 @@ class NetLogoModel(Model):
         self.efficiency_parameter = efficiency_parameter
 
         # Other info
-        self.talk_span = other_data['talk_span'] * 1000  # * 1000 for km to m
+        self.cbo_list = []
+        self.talk_span = other_data['talk_span']
         self.total_cit = other_data['actual_num_cit']
         disruption = other_data['disruption']
         NGO_message = other_data['NGO_message']
+        self.neighbor_type = neighbor_type
 
         # For performance issue
         #   we use dict for fast lookup and modification
@@ -86,70 +90,114 @@ class NetLogoModel(Model):
                              ModelCalculator.compute_total("idatt"),
                              "Total influence message":
                              ModelCalculator.compute_total("im"),
+                             "Total power":
+                             ModelCalculator.compute_total("power"),
                              },
             agent_reporters={"Preference": "pref",
                              "Utility": "utility",
                              "Salient preference": "tpreference",
                              "Idatt": "idatt",
                              "Influence message": "im",
-                             "Own pref": "own-pref"
+                             "Own pref": "own-pref",
+                             "Power": "power"
                              }
         )
 
-    def get_neighbors(self, agent):
-        # Get the direct neighbor of the specified agent
-        return self.grid.get_neighbors(agent)
-
     def step(self):
-        pp = pprint.PrettyPrinter(indent=4)
-
-        if self.log_level >= 1:
-            print("STARTING tick {}".format(self.schedule.steps), flush=True)
-
-        if self.log_level >= 2:
-            print("Restting agents", flush=True)
-
-        # Reset citizen's type
-        for agent in self.schedule.agents:
-            # Set the coalition that this citizen is in in this tick
-            setattr(agent, "coalition", None)
-
-        if self.log_level >= 2:
-            print("Sending messages for potential coalitions", flush=True)
+        self.print_log(1, f"---STARTING tick {self.schedule.steps}")
 
         # Forming coalition
+        self.print_log(2, "Sending messages for potential coalitions")
         coalition_helper = CoalitionHelper(
             self.schedule.agents,
             "unique_id", "power", "own-pref", "utility",
-            self.efficiency_parameter)
+            self.efficiency_parameter, log_level=self.log_level)
         coalition_list = coalition_helper.form_coalition(
-            self, neighbor_type=3, talk_span=self.talk_span)
-
-        if self.log_level >= 3:
-            print("List of all coalition: ", flush=True)
-            pp.pprint(coalition_list)
-
-        if self.log_level >= 2:
-            print("Setting agents' coalition list", flush=True)
+            self.get_neighbor_dispatcher(), self.cbo_list)
+        self.print_log(3, "List of all coalition: ", coalition_list)
 
         # Update the coalition of all eligible agent
+        self.print_log(2, "Sending messages to agent for new coalition list")
         for coalition in coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
-            setattr(agent_1, "coalition", coalition)
-            setattr(agent_2, "coalition", coalition)
+            setattr(agent_1, "new_coalition", coalition)
+            setattr(agent_2, "new_coalition", coalition)
+            self.cbo_list.append(agent_1)
+            self.cbo_list.append(agent_2)
 
-        if self.log_level >= 2:
-            print("Agents start stepping", flush=True)
+        # TODO: Clean this up
+        # self.print_log(2, "Sending messages to agent for EXPIRE coalition")
 
         # Advance the model by one step
+        self.print_log(2, "Agents start stepping")
         self.schedule.step()
 
-        if self.log_level >= 2:
-            print("Collecting data", flush=True)
-
         # Collect stats
+        self.print_log(2, "Collecting data")
         self.datacollector.collect(self)
 
-        if self.log_level >= 1:
-            print("ENDING tick {}\n".format(self.schedule.steps), flush=True)
+        self.print_log(1, f"---ENDING tick {self.schedule.steps}\n")
+
+    '''------Helpers------'''
+
+    # Loggings
+    def print_log(self, log_level, log_string, json_data=None):
+        if self.log_level >= log_level:
+            print(log_string, flush=True)
+            if json_data is not None:
+                pp = pprint.PrettyPrinter(indent=2)
+                pp.pprint(json_data)
+
+    # Neighbor issues...
+    # Helper to trieve neighbor list of an agent
+    def get_neighbor_dispatcher(self):
+        """Generate list of neighbor of the "agent"
+
+        Args:
+            agent_list ([list]): list of agent to check
+            agent ([object]): current agent
+            neighbor_type ([int]): type of neightbor to get for each cit
+                0: treats all cits as neighbor
+                1: direct neighbor
+                2: small world network # TODO
+                3: talk span in km
+                (default: {0})
+        """
+
+        if self.neighbor_type == 0:
+            return self.get_all_as_neighbors
+        if self.neighbor_type == 1:
+            return self.get_direct_neighbors
+        if self.neighbor_type == 3:
+            return self.get_neighbors_within_talk_span
+
+    def get_all_as_neighbors(self, _):
+        # Make a copy of the agent list
+        return self.schedule.agents[:]
+
+    def get_direct_neighbors(self, agent):
+        # Get the direct neighbor of the specified agent
+        potential_neighbors = self.grid.get_neighbors(agent)
+        neighbors = list(
+            filter(lambda n: n not in self.cbo_list, potential_neighbors))
+        return neighbors
+
+    def get_neighbors_within_talk_span(self, agent):
+        result = []
+        agent_center = agent.shape.centroid
+        # Reverse tuple for lat long
+        agent_coords = list(agent_center.coords)[0][::-1]
+
+        for other in self.schedule.agents:
+            if agent is other:
+                continue
+
+            other_center = other.shape.centroid
+            other_coords = list(other_center.coords)[0][::-1]
+
+            coord_distance = distance.distance(agent_coords, other_coords).km
+            if coord_distance < self.talk_span:
+                result.append(other)
+
+        return result
