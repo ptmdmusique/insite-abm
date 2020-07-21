@@ -288,7 +288,7 @@ def analyze_input(meta_data):
     # Tick for further processing
     with open(out_CSV_path, 'w+') as json_file:
         json_file.write("\n\n\n\n\n\n\n\n\n\n\n\n")
-        df_out.to_csv(json_file, index=False)
+        df_out.to_csv(json_file, index=False, line_terminator='\n')
         json_file.close()
 
     with open(out_cit_path, 'w') as json_file:

@@ -1,84 +1,57 @@
-"""
-Use mesa and mesa-geo to build Insite Software agent based modelling
-    based on Techno Social Energy Infrastructure
+from model_driver import run_model
 
-* mesa: https://mesa.readthedocs.io/en/master/tutorials/adv_tutorial.html
-* mesa-geo: https://github.com/Corvince/mesa-geo
-"""
-# File system
-import json
-# Stats
+import os
+import os.path
 import time
-# Helper
-import pandas as pd
-import matplotlib.pyplot as plt
+from pathlib import Path
 
-from netlogo_model import NetLogoModel
+TICK0_FILENAME = "tick0.csv"
+CIT_GEOJSON_FILENAME = "compact-cit-shape.json"
+META_DATA_FILENAME = "meta-data.json"
+
+OUTPUT_PATH = "data/output/agent_data.csv"
+STEP0_FOLDER_PATH = "data/step0"
+NAME_PREFIX = "batch_"
+num_batch = len(os.listdir(STEP0_FOLDER_PATH))
 
 
-def read_JSON(path):
-    with open(path) as jsonFile:
-        return json.load(jsonFile)
-
-
-def run_with_timer(func, purpose, verbose=True):
+def run_with_timer(func, purpose, log_level=0):
     print(f'---{purpose}---', flush=True)
 
     start_time = time.time()
-    if verbose:
+    if log_level >= 1:
         print(f"~~~Start time: {start_time}", flush=True)
 
-    func()
+    result = func()
 
-    if verbose:
+    if log_level >= 1:
         print(f"~~~End time: {time.time()}", flush=True)
         print(f'~~~Time taken: {time.time() - start_time}', flush=True)
         print(f'==={purpose}===\n', flush=True)
 
-
-TICK_PATH = "data/tick0.csv"
-CIT_GEOJSON_PATH = "data/compact-cit-shape.json"
-OTHER_DATA_PATH = "data/other-data.json"
-TOTAL_TICKS = 26
-
-NGO_MESSAGE = 4.5
-
-'''LOADING DATA'''
-# Load in the data file then pass it into the model
-"""Note:
-    im - influence message
-    tpreference - salient preference
-    pref - preference
-    own-pref - ?
-"""
-agent_list = pd.read_csv(TICK_PATH)
-
-# Load geojson files
-cit_geojson = read_JSON(CIT_GEOJSON_PATH)
-
-# Load other data
-other_data = read_JSON(OTHER_DATA_PATH)
+    return result
 
 
-'''RUNNING MODEL'''
-# Load in and run the model
-netlogo_model = NetLogoModel(
-    agent_list, cit_geojson, other_data,
-    verbose=False)
-for tick in range(TOTAL_TICKS):
-    netlogo_model.step()
+# Clean up old file
+# run_with_timer(lambda: os.remove(OUTPUT_PATH), "Cleaning old file")
+run_with_timer(lambda:
+               Path(OUTPUT_PATH).unlink(missing_ok=True), "Cleaning old file")
 
-'''PLOTTING RESULT'''
-model_data = netlogo_model.datacollector.get_model_vars_dataframe()
-for axis_key in model_data.columns.values:
-    plot = model_data.reset_index().plot.line(x="index", y=axis_key)
-    plot.set_xlabel("Tick")
 
-agent_data = netlogo_model.datacollector.get_agent_vars_dataframe()
-for axis_key in agent_data.columns.values:
-    plot = agent_data.reset_index().plot.scatter(x="Step", y=axis_key)
-    plot.set_xlabel("Tick")
+# Then batch run
+def run_batch():
+    for cur_batch in range(num_batch):
+        print(f"\tBatch {cur_batch}/{num_batch}=======", flush=True)
 
-print(agent_data.corr())
+        cur_folder_path = os.path.join(
+            STEP0_FOLDER_PATH, NAME_PREFIX + str(cur_batch))
 
-plt.show()
+        tick0_path = os.path.join(cur_folder_path, TICK0_FILENAME)
+        cit_geojson_path = os.path.join(cur_folder_path, CIT_GEOJSON_FILENAME)
+        meta_data_path = os.path.join(cur_folder_path, META_DATA_FILENAME)
+
+        run_model(tick0_path, cit_geojson_path,
+                  meta_data_path, output_path=OUTPUT_PATH)
+
+
+run_with_timer(run_batch, "RUNNING ALL BATCH")
