@@ -49,6 +49,9 @@ class NetLogoModel(Model):
 
         # Create agents
         for agent_attr in self.agents:
+            if agent_attr['proximity'] > 1:
+                continue
+
             # Extract the geojson of that agent
             shape = Polygon(
                 geojson_list[str(agent_attr['id'])]['coordinates'][0])
@@ -80,10 +83,12 @@ class NetLogoModel(Model):
         self.datacollector = DataCollector(
             model_reporters={"Total preference":
                              ModelCalculator.compute_total("pref"),
-                             "Total own preference":
-                             ModelCalculator.compute_total("own-pref"),
+                             #  "Total own preference":
+                             #  ModelCalculator.compute_total("own-pref"),
                              "Total utility":
                              ModelCalculator.compute_total("utility"),
+                             "Total salient":
+                             ModelCalculator.compute_total("salience"),
                              "Total salient preference":
                              ModelCalculator.compute_total("tpreference"),
                              "Idatt":
@@ -92,9 +97,13 @@ class NetLogoModel(Model):
                              ModelCalculator.compute_total("im"),
                              "Total power":
                              ModelCalculator.compute_total("power"),
+                             "Total Proximity":
+                             ModelCalculator.compute_total("proximity"),
                              },
             agent_reporters={"Preference": "pref",
                              "Utility": "utility",
+                             "Salience": "salience",
+                             "Proximity": "proximity",
                              "Salient preference": "tpreference",
                              "Idatt": "idatt",
                              "Influence message": "im",
@@ -126,9 +135,6 @@ class NetLogoModel(Model):
             self.cbo_list.append(agent_1)
             self.cbo_list.append(agent_2)
 
-        # TODO: Clean this up
-        # self.print_log(2, "Sending messages to agent for EXPIRE coalition")
-
         # Advance the model by one step
         self.print_log(2, "Agents start stepping")
         self.schedule.step()
@@ -139,6 +145,8 @@ class NetLogoModel(Model):
 
         self.print_log(1, f"---ENDING tick {self.schedule.steps}\n")
 
+    #
+    #
     '''------Helpers------'''
 
     # Loggings

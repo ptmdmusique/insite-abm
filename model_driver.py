@@ -41,7 +41,7 @@ def run_with_timer(func, purpose, log_level=0):
 
 
 def run_model(tick_path, cit_geojson_path, other_data_path, total_ticks=26,
-              output_path=None):
+              agent_output_path=None, model_output_path=None):
     def drive_model(log_level=0):
         '''RUNNING MODEL'''
         # Load in and run the model
@@ -92,9 +92,25 @@ def run_model(tick_path, cit_geojson_path, other_data_path, total_ticks=26,
 
     # plt.show()
 
-    if output_path is not None:
+    if model_output_path is not None:
         append_write = 'w'  # make a new file if not
-        if os.path.exists(output_path):
+        if os.path.exists(model_output_path):
+            append_write = 'a'  # append if already exists
+
+        # Append new meta column into the file
+        model_data.insert(1, "Num Cit", meta_data['actual_num_cit'])
+        model_data.insert(1, "Disruption", meta_data['disruption'])
+        model_data.insert(1, "Talk span", meta_data['talk_span'])
+        model_data.insert(1, "NGO Message", meta_data['NGO_message'])
+        # And write it out to file
+        with open(model_output_path, append_write) as out_file:
+            model_data.to_csv(out_file,
+                              header=out_file.tell() == 0,
+                              line_terminator='\n')
+
+    if agent_output_path is not None:
+        append_write = 'w'  # make a new file if not
+        if os.path.exists(agent_output_path):
             append_write = 'a'  # append if already exists
 
         # Append new meta column into the file
@@ -103,7 +119,7 @@ def run_model(tick_path, cit_geojson_path, other_data_path, total_ticks=26,
         agent_data.insert(1, "Talk span", meta_data['talk_span'])
         agent_data.insert(1, "NGO Message", meta_data['NGO_message'])
         # And write it out to file
-        with open(output_path, append_write) as out_file:
+        with open(agent_output_path, append_write) as out_file:
             agent_data.to_csv(out_file,
                               header=out_file.tell() == 0,
                               line_terminator='\n')
@@ -116,4 +132,5 @@ if __name__ == '__main__':
     TOTAL_TICKS = 26
 
     run_model(TICK_PATH, CIT_GEOJSON_PATH, OTHER_DATA_PATH,
-              output_path='data/output/agent_data.csv')
+              #   output_path='data/output/agent_data.csv'
+              )

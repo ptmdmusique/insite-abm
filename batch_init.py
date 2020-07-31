@@ -68,7 +68,7 @@ initializer_batch_params = {
         "type": "set",
         # Set of values
         "values": [0.1, 0.2, 0.5, 0.75, 1],
-        "default": 1,
+        "default": 0.5,
     },
     # Number of cits we want to extract
     "initial_number": {

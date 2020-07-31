@@ -9,7 +9,8 @@ TICK0_FILENAME = "tick0.csv"
 CIT_GEOJSON_FILENAME = "compact-cit-shape.json"
 META_DATA_FILENAME = "meta-data.json"
 
-OUTPUT_PATH = "data/output/agent_data.csv"
+AGENT_OUTPUT_PATH = "data/output/agent_data.csv"
+MODEL_OUTPUT_PATH = "data/output/model_data.csv"
 STEP0_FOLDER_PATH = "data/step0"
 NAME_PREFIX = "batch_"
 num_batch = len(os.listdir(STEP0_FOLDER_PATH))
@@ -33,9 +34,12 @@ def run_with_timer(func, purpose, log_level=0):
 
 
 # Clean up old file
-# run_with_timer(lambda: os.remove(OUTPUT_PATH), "Cleaning old file")
 run_with_timer(lambda:
-               Path(OUTPUT_PATH).unlink(missing_ok=True), "Cleaning old file")
+               Path(AGENT_OUTPUT_PATH).unlink(missing_ok=True),
+               "Cleaning old agent file")
+run_with_timer(lambda:
+               Path(MODEL_OUTPUT_PATH).unlink(missing_ok=True),
+               "Cleaning old model file")
 
 
 # Then batch run
@@ -50,8 +54,9 @@ def run_batch():
         cit_geojson_path = os.path.join(cur_folder_path, CIT_GEOJSON_FILENAME)
         meta_data_path = os.path.join(cur_folder_path, META_DATA_FILENAME)
 
-        run_model(tick0_path, cit_geojson_path,
-                  meta_data_path, output_path=OUTPUT_PATH)
+        run_model(tick0_path, cit_geojson_path, meta_data_path,
+                  agent_output_path=AGENT_OUTPUT_PATH,
+                  model_output_path=MODEL_OUTPUT_PATH)
 
 
 run_with_timer(run_batch, "RUNNING ALL BATCH")
