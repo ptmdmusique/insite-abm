@@ -18,7 +18,7 @@ None
    1. They joined the cbo coalition forming
    2. They update their scalepower every tick (which leads to sown-power being updated)
 2. First citizen of links in every ticks becomes stakeholder
-   1. They will join the pre-defined stakeholders and try to form cbo coalition with the same exact criteria as regular ticks
+   1. They will join the pre-defined stakeholders and try to form cbo coalition with the same exact criteria as regular cits
 
 ## Note:
 1. ! Stakeholders aren't affected by talk-span
@@ -32,7 +32,7 @@ None
 ## Note:
 1. ! Regulators aren't affected by talk-span
 <!-- ? Pre-defined regulator start updating their stuff at tick 15, but they're only active at tick >= 21, why? -->
-
+16 to 20: regulators bargain with stakeholders. From 21 to 25 they will bargain among themselves
 
 # Note from original SemPro model
 ## Cit module:
@@ -62,3 +62,13 @@ In the third way, agents convey their attitude every iteration, but only after r
 # Questions:
 1. ? utility-info, big-ngo are used with some specific stakeholder **only**
 2. ? After each tick, pro dev cits normalizes their power with cbo-power of pro dev cits. Same for anti dev cits.
+
+# Future plan:
+1. Implement a check to stop the model after there is no more change
+
+utility-info, big-ngo are for certain stakeholders to influence other citizens around them
+
+
+ ? Should a citizen becomes a stakeholder then join stakeholder cbo in the same tick?
+ ? Should a citizen/stakeholder update their attrs at the end of the tick? After all the coalition are formed?
+ ? Where is sown-eu in the stakeholder file?

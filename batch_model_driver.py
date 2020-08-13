@@ -9,8 +9,11 @@ TICK0_FILENAME = "tick0.csv"
 CIT_GEOJSON_FILENAME = "compact-cit-shape.json"
 META_DATA_FILENAME = "meta-data.json"
 
+STAKEHOLDER_PATH = "data/input/stakeholders.csv"
+REGULATOR_PATH = "data/input/regulators.csv"
 AGENT_OUTPUT_PATH = "data/output/agent_data.csv"
 MODEL_OUTPUT_PATH = "data/output/model_data.csv"
+
 STEP0_FOLDER_PATH = "data/step0"
 NAME_PREFIX = "batch_"
 num_batch = len(os.listdir(STEP0_FOLDER_PATH))
@@ -54,7 +57,11 @@ def run_batch():
         cit_geojson_path = os.path.join(cur_folder_path, CIT_GEOJSON_FILENAME)
         meta_data_path = os.path.join(cur_folder_path, META_DATA_FILENAME)
 
-        run_model(tick0_path, cit_geojson_path, meta_data_path,
+        run_model(tick_path=tick0_path,
+                  cit_geojson_path=cit_geojson_path,
+                  meta_data_path=meta_data_path,
+                  stakeholder_path=STAKEHOLDER_PATH,
+                  regulator_path=REGULATOR_PATH,
                   agent_output_path=AGENT_OUTPUT_PATH,
                   model_output_path=MODEL_OUTPUT_PATH)
 

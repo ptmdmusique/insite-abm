@@ -52,7 +52,7 @@ def analyze_input(meta_data):
     ]
     output_columns = [
         'id', 'xcor', 'ycor',
-        'own-pref', 'ideo', 'idatt', 'pref', 'tpreference',
+        'own_pref', 'ideo', 'idatt', 'pref', 'tpreference',
         'power', 'closest_distance', 'proximity', 'salience', 'im', 'ran',
         'utility'
     ]
@@ -229,7 +229,7 @@ def analyze_input(meta_data):
     dfr['power'] = dfr.apply(lambda row: 2 * row['ppower'], axis=1)
     df_out['own-power'] = df_out['power'] = dfr['power'].values
 
-    df_out['own-pref'] = df_out.apply(lambda row: (
+    df_out['own_pref'] = df_out.apply(lambda row: (
         (row['proximity'] * 100) + row['idatt']) / 2, axis=1)
     df_out['utility'] = df_out.apply(
         lambda row: 100 * row['own-power'], axis=1)

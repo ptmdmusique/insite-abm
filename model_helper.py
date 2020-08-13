@@ -1,8 +1,13 @@
 from operator import attrgetter
 from functools import reduce
-from shapely.prepared import prep
+import math
 import pprint
 # REFERENCE: https://github.com/tpike3/bilateralshapley
+
+
+'''NOTES'''
+# sh: stakeholder
+# cit: citizen
 
 
 class ModelCalculator():
@@ -10,12 +15,17 @@ class ModelCalculator():
     def compute_total(attribute):
         def helper(model):
             def reducer(accum, agent):
-                # if attribute == "utility" and getattr(agent, attribute) > 200:
-                #     print(accum, getattr(agent, attribute))
                 return accum + getattr(agent, attribute)
 
-            agents = model.schedule.agents
-            return reduce(reducer, agents, 0)
+            result = 0
+            try:
+                agents = model.schedule.agents
+                result = reduce(reducer, agents, 0)
+                # result = result if result == 0 else math.log(result)
+            except AttributeError:
+                # This means the agent is not a cit
+                return 0
+            return result
 
         return helper
 
@@ -23,7 +33,7 @@ class ModelCalculator():
 class CoalitionHelper():
     '''Helper to form coalitions for agents'''
 
-    def __init__(self, agents, id_key, power_key, pref_key, util_key,
+    def __init__(self, id_key, power_key, pref_key, util_key,
                  efficiency_parameter=1.5, log_level=0):
         """Initialize coalition helper
 
@@ -38,7 +48,6 @@ class CoalitionHelper():
               a coalition (i.e. no coalitions) and usually more than 2.0
               results in everyone joining the same coalition
         """
-        self.agents = agents
         self.id_key = id_key
         self.power_key = power_key
         self.pref_key = pref_key
@@ -46,11 +55,11 @@ class CoalitionHelper():
         self.efficiency = efficiency_parameter
         self.log_level = log_level
 
-    def form_coalition(self, get_neighbors, cbo_list):
+    def form_coalition(self, get_neighbors, agent_list, ignored_list):
         """Return a list of coalition from given agent list
         Args:
             get_neighbors: neighbor getter for agents
-            cbo_list: list of current CBOs
+            ignored_list: list of citizen that should be ignored
         """
 
         # Map of potential coalition of each agent where
@@ -62,21 +71,21 @@ class CoalitionHelper():
 
         # Try to form every possible coalition
         # This is technically an agent sending message out to others
-        for agent in self.agents:
-            if agent in cbo_list:
+        for agent in agent_list:
+            if agent in ignored_list:
                 continue
 
             # Check from one agent to another
             agent_id = id_of(agent)
-            neighbor_list = get_neighbors(agent)
+            neighbor_list = get_neighbors(agent, agent_list)
             # Filter CBOs out
             neighbor_list = list(
-                filter(lambda x: x not in cbo_list, neighbor_list))
+                filter(lambda x: x not in ignored_list, neighbor_list))
 
             for other in neighbor_list:
                 if id_of(other) == id_of(agent):
                     continue
-                coalition_result = self.check_coalition(agent, other)
+                coalition_result = self.check_cit_coalition(agent, other)
 
                 # Coalition is good enough
                 if coalition_result is not None:
@@ -140,10 +149,12 @@ class CoalitionHelper():
 
         return coalition_list
 
+    #
+    #
     '''Helpers'''
 
     # Helper to check whether a coalition is possible between 2 agents
-    def check_coalition(self, agent, other):
+    def check_cit_coalition(self, agent, other):
         # Condition to form coalition:
         #   bilateral shapley value > own power on both ends
         agent_power = getattr(agent, self.power_key)
@@ -182,9 +193,50 @@ class CoalitionHelper():
                 "utility_1": cbo_eu_1,
                 "utility_2": cbo_eu_2,
             }
-
         return None
 
+    def check_sh_coalition(self, agent, other):
+        # Condition to form coalition:
+        #   bilateral shapley value > own power on both ends
+        agent_power = getattr(agent, self.power_key)
+        other_power = getattr(other, self.power_key)
+        agent_pref = getattr(agent, self.pref_key)
+        other_pref = getattr(other, self.pref_key)
+        agent_util = getattr(agent, self.util_key)
+        other_util = getattr(other, self.util_key)
+
+        coal_power = agent_power + other_power
+        coal_pref = \
+            ((agent_pref * agent_power + other_pref * other_power) /
+             (agent_power + other_power + 0.0000001))
+
+        # Expected utility of the coalition
+        # ! Need to double check this
+        coal_util = coal_power * (100 - abs(coal_pref - coal_pref))
+
+        # Determine bilateral shapley value for both agents
+        cbo_eu_1 = (100 - abs(coal_pref - agent_pref)) * \
+            (agent_power + (coal_power - agent_power)) * \
+            (agent_power / (coal_power + 0.0000001))        # Shapley 1
+        cbo_eu_2 = (100 - abs(coal_pref - agent_pref)) * \
+            (other_power + (coal_power - other_power)) * \
+            (other_power / (coal_power + 0.0000001))        # Shapley 2
+
+        if cbo_eu_1 >= agent_util and cbo_eu_2 > other_util:
+            # if a coalition increases both utilities
+            # then this coalition is good enough
+            # Coalition preference
+            return {
+                "coal_power": coal_power,
+                "coal_util": coal_util,
+                "coal_pref": coal_pref,
+                "utility_1": cbo_eu_1,
+                "utility_2": cbo_eu_2,
+            }
+        return None
+
+    #
+    #
     # Loggings
     def print_log(self, log_level, log_string, json_data=None):
         if self.log_level >= log_level:

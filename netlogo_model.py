@@ -1,4 +1,5 @@
 # Core libraries
+from sh_agent import StakeholderAgent
 from mesa import Model
 from mesa.time import BaseScheduler
 from mesa_geo import GeoSpace
@@ -11,11 +12,29 @@ import pprint
 from cit_agent import CitAgent
 from model_helper import CoalitionHelper, ModelCalculator
 
+'''NOTES'''
+# sh: stakeholder
+# cit: citizen
+
 
 class NetLogoModel(Model):
     """A model with some number of agents."""
+    cit_list = []   # List of citizen
+    cbo_list = []   # List of cits' CBOs
+    sh_list = []    # List of stakeholder
+    sh_cbo_list = []    # List of stakeholder's CBOs
+    # For performance issue
+    #   we use dict for fast lookup and modification
+    agent_dict = {}
 
-    def __init__(self, agent_list, geojson_list, other_data,
+    def __init__(self,
+                 cit_pd,
+                 stakeholder_pd,
+                 regulator_pd,
+                 geojson_list,
+
+                 meta_data,
+
                  neighbor_type=0,
                  efficiency_parameter=1.5, log_level=0):
         self.log_level = log_level
@@ -23,47 +42,34 @@ class NetLogoModel(Model):
         if self.log_level >= 2:
             print("Initializing model")
 
-        # Initialize the schedule
+        # * Initialize mesa
         self.grid = GeoSpace(crs={"init": "epsg:4326"})
         self.schedule = BaseScheduler(self)
-        self.agents = agent_list.to_dict(orient='records')
+
+        self.talk_span = meta_data['talk_span']
+        self.total_cit = meta_data['actual_num_cit']
+        disruption = meta_data['disruption']
+        NGO_message = meta_data['NGO_message']
+        self.neighbor_type = neighbor_type
         self.efficiency_parameter = efficiency_parameter
 
-        # Other info
-        self.cbo_list = []
-        self.talk_span = other_data['talk_span']
-        self.total_cit = other_data['actual_num_cit']
-        disruption = other_data['disruption']
-        NGO_message = other_data['NGO_message']
-        self.neighbor_type = neighbor_type
-
-        # For performance issue
-        #   we use dict for fast lookup and modification
-        self.agent_dict = {}
-
-        # Get the max preference to normalize it
-        # max_pref = agent_list['pref'].max()
-
+        sum_power = 0
+        # * Initialize agents
         if self.log_level >= 2:
-            print("Initializing agents")
+            print("Initializing citizens")
 
-        # Create agents
-        for agent_attr in self.agents:
-            if agent_attr['proximity'] > 1:
+        # --- Create citizens
+        cit_list = cit_pd.to_dict(orient='records')
+        for cit_attr in cit_list:
+            # ? Should we leave this here
+            if cit_attr['proximity'] > 1:
                 continue
 
             # Extract the geojson of that agent
             shape = Polygon(
-                geojson_list[str(agent_attr['id'])]['coordinates'][0])
+                geojson_list[str(cit_attr['id'])]['coordinates'][0])
 
-            # Normalize the preference to the range [0, 100]
-            #   to make sure no agent has pref > 100
-            #   (clamping from [0, maxPref] to [0, 100])
-            # ? Is this a good solution?
-            attr_list = agent_attr.copy()   # Make a copy to avoid side-effect
-            # TODO: Check whether we should normalize stuff here
-            # attr_list['pref'] = attr_list['pref'] / max_pref * 100
-
+            attr_list = cit_attr.copy()   # Make a copy to avoid side-effect
             attr_list['disruption'] = disruption
             attr_list['NGO_message'] = NGO_message
             attr_list['efficiency_parameter'] = efficiency_parameter
@@ -72,74 +78,134 @@ class NetLogoModel(Model):
             agent = CitAgent(self, attr_list, shape)
             self.grid.add_agents(agent)
             self.schedule.add(agent)
+            self.cit_list.append(agent)
 
             # Add the reference to that agent
-            self.agent_dict[agent_attr['id']] = agent
+            self.agent_dict[cit_attr['id']] = agent
 
+            sum_power += attr_list['power']
+
+        # --- Create stakeholders
+        sh_list = stakeholder_pd.to_dict(orient='records')
+        for sh_attr in sh_list:
+            attr_list = sh_attr.copy()   # Make a copy to avoid side-effect
+            attr_list['disruption'] = disruption
+            attr_list['NGO_message'] = NGO_message
+            attr_list['efficiency_parameter'] = efficiency_parameter
+
+            # Then create an agent out of those
+            agent = StakeholderAgent(self, attr_list, cit_power=sum_power)
+            self.schedule.add(agent)
+            self.sh_list.append(agent)
+
+            # Add the reference to that agent
+            self.agent_dict[sh_attr['id']] = agent
+
+        # * Initialize data collectors
         if self.log_level >= 2:
             print("Initializing data collectors")
 
         # Set up data collector
         self.datacollector = DataCollector(
-            model_reporters={"Total preference":
-                             ModelCalculator.compute_total("pref"),
-                             #  "Total own preference":
-                             #  ModelCalculator.compute_total("own-pref"),
-                             "Total utility":
-                             ModelCalculator.compute_total("utility"),
-                             "Total salient":
-                             ModelCalculator.compute_total("salience"),
-                             "Total salient preference":
-                             ModelCalculator.compute_total("tpreference"),
-                             "Idatt":
-                             ModelCalculator.compute_total("idatt"),
-                             "Total influence message":
-                             ModelCalculator.compute_total("im"),
-                             "Total power":
-                             ModelCalculator.compute_total("power"),
-                             "Total Proximity":
-                             ModelCalculator.compute_total("proximity"),
-                             },
-            agent_reporters={"Preference": "pref",
-                             "Utility": "utility",
-                             "Salience": "salience",
-                             "Proximity": "proximity",
-                             "Salient preference": "tpreference",
-                             "Idatt": "idatt",
-                             "Influence message": "im",
-                             "Own pref": "own-pref",
-                             "Power": "power"
-                             }
+            model_reporters={
+                # "Total preference":
+                # ModelCalculator.compute_total("pref"),
+                # "Total utility":
+                # ModelCalculator.compute_total("utility"),
+                # "Total salient":
+                # ModelCalculator.compute_total("salience"),
+                # #  "Total salient preference":
+                # #  ModelCalculator.compute_total("tpreference"),
+                # "Idatt":
+                # ModelCalculator.compute_total("idatt"),
+                # "Total influence message":
+                # ModelCalculator.compute_total("im"),
+                # "Total own preference":
+                # ModelCalculator.compute_total("own_pref"),
+                # #  "Total power":
+                # #  ModelCalculator.compute_total("power"),
+                # "Total Message":
+                # ModelCalculator.compute_total("message"),
+            },
+            agent_reporters={
+                # "Preference": "pref",
+                # "Utility": "utility",
+                # "Salience": "salience",
+                # #  "Salient preference": "tpreference",
+                # "Idatt": "idatt",
+                # "Influence message": "im",
+                # #  "Own pref": "own_pref",
+                # #  "Power": "power",
+                # "Message": "message"
+            }
         )
 
     def step(self):
         self.print_log(1, f"---STARTING tick {self.schedule.steps}")
 
-        # Forming coalition
+        # ******** Forming citizen coalition
         self.print_log(2, "Sending messages for potential coalitions")
-        coalition_helper = CoalitionHelper(
-            self.schedule.agents,
-            "unique_id", "power", "own-pref", "utility",
-            self.efficiency_parameter, log_level=self.log_level)
-        coalition_list = coalition_helper.form_coalition(
-            self.get_neighbor_dispatcher(), self.cbo_list)
-        self.print_log(3, "List of all coalition: ", coalition_list)
 
-        # Update the coalition of all eligible agent
+        cit_coalition_helper = CoalitionHelper(
+            "unique_id", "power",
+            "own_pref", "utility",
+            self.efficiency_parameter, log_level=self.log_level)
+        # * Trying to form all coalitions
+        #   and ignore the one who is already in CBO
+        cit_coalition_list = cit_coalition_helper.form_coalition(
+            self.get_neighbor_dispatcher(self.neighbor_type),
+            agent_list=self.cit_list,
+            ignored_list=self.cbo_list)
+
+        self.print_log(3, "List of all coalition: ", cit_coalition_list)
+
+        # ******** Forming sh coalition
+        self.print_log(2, "Sending messages for potential coalitions")
+
+        sh_coalition_helper = CoalitionHelper(
+            "unique_id", "sh_power",
+            "sh_pref", "sh_utility",
+            self.efficiency_parameter, log_level=self.log_level)
+        # * Trying to form all coalitions
+        #   and ignore the one who is already in CBO
+        sh_coalition_list = sh_coalition_helper.form_coalition(
+            self.get_neighbor_dispatcher(0),    # Always get all neighbors
+            agent_list=self.sh_list,
+            ignored_list=self.sh_cbo_list)
+
+        self.print_log(3, "List of all coalition: ", sh_coalition_list)
+
+        # ******** Updating coalition
+        # * Update the cit coalition of all eligible agent
         self.print_log(2, "Sending messages to agent for new coalition list")
-        for coalition in coalition_list:
+        for coalition in cit_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
-            setattr(agent_1, "new_coalition", coalition)
-            setattr(agent_2, "new_coalition", coalition)
+            setattr(agent_1, "pending_cit_coalition", coalition)
+            setattr(agent_2, "pending_cit_coalition", coalition)
             self.cbo_list.append(agent_1)
             self.cbo_list.append(agent_2)
 
-        # Advance the model by one step
+        # * Update the stakeholder coalition of all eligible agent
+        self.print_log(2, "Sending messages to agent for new coalition list")
+        for coalition in sh_coalition_list:
+            agent_1 = self.agent_dict[coalition['id_1']]
+            agent_2 = self.agent_dict[coalition['id_2']]
+            setattr(agent_1, "pending_sh_coalition", coalition)
+            setattr(agent_2, "pending_sh_coalition", coalition)
+            self.sh_cbo_list.append(agent_1)
+            self.sh_cbo_list.append(agent_2)
+
+        # ******** Advance the model by one step
         self.print_log(2, "Agents start stepping")
         self.schedule.step()
 
-        # Collect stats
+        # ******** Check for stakeholder
+        for cit in self.schedule.agents:
+            if cit.isSh is True and cit not in self.sh_list:
+                self.sh_list.append(cit)
+
+        # ******** Collect stats
         self.print_log(2, "Collecting data")
         self.datacollector.collect(self)
 
@@ -159,7 +225,7 @@ class NetLogoModel(Model):
 
     # Neighbor issues...
     # Helper to trieve neighbor list of an agent
-    def get_neighbor_dispatcher(self):
+    def get_neighbor_dispatcher(self, neighbor_type):
         """Generate list of neighbor of the "agent"
 
         Args:
@@ -173,31 +239,31 @@ class NetLogoModel(Model):
                 (default: {0})
         """
 
-        if self.neighbor_type == 0:
+        if neighbor_type == 0:
             return self.get_all_as_neighbors
-        if self.neighbor_type == 1:
+        if neighbor_type == 1:
             return self.get_direct_neighbors
-        if self.neighbor_type == 3:
+        if neighbor_type == 3:
             return self.get_neighbors_within_talk_span
 
-    def get_all_as_neighbors(self, _):
+    def get_all_as_neighbors(self, _, agent_list):
         # Make a copy of the agent list
-        return self.schedule.agents[:]
+        return agent_list[:]
 
-    def get_direct_neighbors(self, agent):
+    def get_direct_neighbors(self, agent, _):
         # Get the direct neighbor of the specified agent
         potential_neighbors = self.grid.get_neighbors(agent)
         neighbors = list(
             filter(lambda n: n not in self.cbo_list, potential_neighbors))
         return neighbors
 
-    def get_neighbors_within_talk_span(self, agent):
+    def get_neighbors_within_talk_span(self, agent, agent_list):
         result = []
         agent_center = agent.shape.centroid
         # Reverse tuple for lat long
         agent_coords = list(agent_center.coords)[0][::-1]
 
-        for other in self.schedule.agents:
+        for other in agent_list:
             if agent is other:
                 continue
 
