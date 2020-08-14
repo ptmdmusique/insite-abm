@@ -1,6 +1,8 @@
 import numpy as np
 from mesa import Agent
 
+from agent_helper import AgentHelper
+
 
 class StakeholderAgent(Agent):
     """A pure stakeholder in our model."""
@@ -22,3 +24,6 @@ class StakeholderAgent(Agent):
         #   into class attributes
         for k, v in attr_list.items():
             setattr(self, k, v)
+
+    def update_sh_coalition_attrs(self, pending_sh_coalition):
+        AgentHelper.update_sh_coalition_attrs(self, pending_sh_coalition)

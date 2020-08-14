@@ -105,7 +105,7 @@ class CoalitionHelper():
                         condition_1 = pot_coal["utility_1"] > utility_1
                         # or coalition with same expected utility
                         # but with closer pref
-                        # that is: old coal pref > new coal pref
+                    # that is: old coal pref > new coal pref
                         condition_2 = (pot_coal["utility_1"] == utility_1 and
                                        pot_coal["coal_pref"] < coal_pref)
                         if condition_1 or condition_2:

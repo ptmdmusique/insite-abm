@@ -65,10 +65,6 @@ In the third way, agents convey their attitude every iteration, but only after r
 
 # Future plan:
 1. Implement a check to stop the model after there is no more change
+2. Double check scalepower sum [own-power] of cits
 
 utility-info, big-ngo are for certain stakeholders to influence other citizens around them
-
-
- ? Should a citizen becomes a stakeholder then join stakeholder cbo in the same tick?
- ? Should a citizen/stakeholder update their attrs at the end of the tick? After all the coalition are formed?
- ? Where is sown-eu in the stakeholder file?

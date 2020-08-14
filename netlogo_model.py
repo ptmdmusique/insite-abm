@@ -11,7 +11,7 @@ import pprint
 # Custom libraries
 from cit_agent import CitAgent
 from model_helper import CoalitionHelper, ModelCalculator
-
+from agent_helper import AgentHelper
 '''NOTES'''
 # sh: stakeholder
 # cit: citizen
@@ -159,6 +159,16 @@ class NetLogoModel(Model):
 
         self.print_log(3, "List of all coalition: ", cit_coalition_list)
 
+        # * Update the cit coalition of all eligible agent
+        self.print_log(2, "Sending messages to agent for new coalition list")
+        for coalition in cit_coalition_list:
+            agent_1 = self.agent_dict[coalition['id_1']]
+            agent_2 = self.agent_dict[coalition['id_2']]
+            agent_1.update_cit_coalition_attrs(coalition)
+            agent_2.update_cit_coalition_attrs(coalition)
+            self.cbo_list.append(agent_1)
+            self.cbo_list.append(agent_2)
+
         # ******** Forming sh coalition
         self.print_log(2, "Sending messages for potential coalitions")
 
@@ -175,24 +185,13 @@ class NetLogoModel(Model):
 
         self.print_log(3, "List of all coalition: ", sh_coalition_list)
 
-        # ******** Updating coalition
-        # * Update the cit coalition of all eligible agent
-        self.print_log(2, "Sending messages to agent for new coalition list")
-        for coalition in cit_coalition_list:
-            agent_1 = self.agent_dict[coalition['id_1']]
-            agent_2 = self.agent_dict[coalition['id_2']]
-            setattr(agent_1, "pending_cit_coalition", coalition)
-            setattr(agent_2, "pending_cit_coalition", coalition)
-            self.cbo_list.append(agent_1)
-            self.cbo_list.append(agent_2)
-
         # * Update the stakeholder coalition of all eligible agent
         self.print_log(2, "Sending messages to agent for new coalition list")
         for coalition in sh_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
-            setattr(agent_1, "pending_sh_coalition", coalition)
-            setattr(agent_2, "pending_sh_coalition", coalition)
+            agent_1.update_sh_coalition_attrs(coalition)
+            agent_2.update_sh_coalition_attrs(coalition)
             self.sh_cbo_list.append(agent_1)
             self.sh_cbo_list.append(agent_2)
 
