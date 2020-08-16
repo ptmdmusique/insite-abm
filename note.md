@@ -60,11 +60,12 @@ In the third way, agents convey their attitude every iteration, but only after r
 
 
 # Questions:
-1. ? utility-info, big-ngo are used with some specific stakeholder **only**
-2. ? After each tick, pro dev cits normalizes their power with cbo-power of pro dev cits. Same for anti dev cits.
+1. ? After each tick, pro dev cits normalizes their power with cbo-power of pro dev cits. Same for anti dev cits.
+2. ? if a citizen becomes a stakeholder, would they join utility-info or big-ngo?
 
 # Future plan:
 1. Implement a check to stop the model after there is no more change
 2. Double check scalepower sum [own-power] of cits
 
 utility-info, big-ngo are for certain stakeholders to influence other citizens around them
+

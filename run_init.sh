@@ -1,1 +1,1 @@
-sh ./run_py.sh "initializer.py" 200 1 0.01 25 4.5 "data\input\cits.geojson" "data\input\TRTP_Route_Project.geojson" "data\tick0.csv" "data\cit-coord.json" "data\cit-shape.json" "data\compact-cit-shape.json" "data\other-data.json"
+sh ./run_py.sh "initializer.py" 200 1 0.01 25 4.5 2.5 3.5 3.5 "data\input\cits.geojson" "data\input\TRTP_Route_Project.geojson" "data\tick0.csv" "data\cit-coord.json" "data\cit-shape.json" "data\compact-cit-shape.json" "data\other-data.json"

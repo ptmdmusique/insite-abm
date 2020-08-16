@@ -16,7 +16,7 @@ class AgentHelper():
             # They also become a sh
             # * Only the initiative citizen becomes the stake holder
             # *   since they are the one who sent out messages in the first
-            agent.isSh = True
+            agent.is_sh = True
 
             # Update sh stuff
             agent.sh_pref = pending_cit_coalition['coal_pref']

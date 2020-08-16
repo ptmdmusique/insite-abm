@@ -1,7 +1,9 @@
 from operator import attrgetter
 from functools import reduce
-import math
 import pprint
+
+from typing import Dict, Union
+from model_types import CBOable_Agent, CBOable_Agent_List
 # REFERENCE: https://github.com/tpike3/bilateralshapley
 
 
@@ -55,7 +57,9 @@ class CoalitionHelper():
         self.efficiency = efficiency_parameter
         self.log_level = log_level
 
-    def form_coalition(self, get_neighbors, agent_list, ignored_list):
+    def form_coalition(self, get_neighbors,
+                       agent_list: CBOable_Agent_List,
+                       ignored_list: CBOable_Agent_List):
         """Return a list of coalition from given agent list
         Args:
             get_neighbors: neighbor getter for agents
@@ -85,7 +89,7 @@ class CoalitionHelper():
             for other in neighbor_list:
                 if id_of(other) == id_of(agent):
                     continue
-                coalition_result = self.check_cit_coalition(agent, other)
+                coalition_result = self.get_cit_coalition(agent, other)
 
                 # Coalition is good enough
                 if coalition_result is not None:
@@ -154,7 +158,10 @@ class CoalitionHelper():
     '''Helpers'''
 
     # Helper to check whether a coalition is possible between 2 agents
-    def check_cit_coalition(self, agent, other):
+    def get_cit_coalition(self,
+                          agent: CBOable_Agent,
+                          other: CBOable_Agent) \
+            -> Union[Dict[str, float], None]:
         # Condition to form coalition:
         #   bilateral shapley value > own power on both ends
         agent_power = getattr(agent, self.power_key)

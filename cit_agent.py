@@ -1,3 +1,5 @@
+from typing import Dict
+from mesa.model import Model
 from shapely.geometry.base import BaseGeometry
 from mesa_geo import GeoAgent
 import numpy as np
@@ -8,22 +10,33 @@ from agent_helper import AgentHelper
 class CitAgent(GeoAgent):
     """A citizen in our model."""
     # * Initial State
-    type = 1   # 1: regular citizen ; 2: in CBO
-    cbo_pref = 0
-    message = 0  # Message cit sends out
-    pent = 0   # For influence model 1
-    pending_cit_coalition = None   # New coalition pending for this tick
-    pending_sh_coalition = None   # New coalition pending for this tick
+    type: int = 1   # 1: regular citizen ; 2: in CBO
+    message: int = 0  # Message cit sends out
+    pent: float = 0   # For influence model 1
+    own_pref: float = 0
+    power: float = 0
+
+    proximity: float = 0
+    disruption: float = 1
+    efficiency_parameter: float = 1.5
+    ran: float = 0
+
+    # * CBO Stuff
+    cbo_pref: float = 0
+    cbo_power: float = 0
 
     # * Stakeholder parameter setup
-    isSh = False  # Always start as a non stakeholder
-    sh_power = 0
-    sh_pref = 0
-    sh_utility = 0
-    isSh = 0
+    is_sh: bool = False  # Always start as a non stakeholder
+    sh_power: float = 0
+    sh_pref: float = 0
+    sh_utility: float = 0
 
-    # * Methods
-    def __init__(self, model, attr_list, shape):
+    # * Other
+    NGO_message: float = 0
+    sponsor_message: float = 0
+
+    # * Default methods
+    def __init__(self, model: Model, attr_list: Dict, shape):
         # Make sure the shape is a shapely object
         if not isinstance(shape, BaseGeometry):
             raise TypeError("Shape must be a Shapely Geometry")
@@ -38,33 +51,73 @@ class CitAgent(GeoAgent):
         for k, v in attr_list.items():
             setattr(self, k, v)
 
+    # * Coalition stuff
     def update_cit_coalition_attrs(self, pending_cit_coalition):
         AgentHelper.update_cit_coalition_attrs(self, pending_cit_coalition)
 
     def update_sh_coalition_attrs(self, pending_sh_coalition):
         AgentHelper.update_sh_coalition_attrs(self, pending_sh_coalition)
 
-    def update_post_tick_attribute(self):
-        ''' utility-info '''
-        # Generate a random number in [0, 0.05]
-        random_float = np.random.random() * 0.05
-        self.idatt = (1 + random_float) * \
-            (self.idatt + self.NGO_message * 0.01)
-        # self.idatt = min(max(self.idatt, 0), 100)  # Cap between 100 and 0
+    # * Risk communication
+    def communicate_sponsor_risk(self, need: float, sponsor_pref: float):
+        """
+        The utility message is received according to random chance and the
+            ideology of the agent.
+        The more positive the agent's attitude, the more likely it is to
+            accept the utility's message.
+        If the random number is higher than the agent's attitude, the agent
+            becomes more disposed to the utility position by a random amount.
+        If the random number is lower, there is a chance the agent will be
+            "turned off" by the utility and become more opposed.
+        """
+        self.communicate_risk(need, self.sponsor_message, sponsor_pref)
 
+    def communicate_big_ngo_risk(self, procedure: float, ngo_pref: float):
+        """
+        The mechanics for the NGO's message mimic those of the utility.
+        If the random number is less than the attitude, augmented by
+            the madcount, it accepts the message.
+        If it is more, the madcount is increased.
+        """
+        self.communicate_risk(procedure, self.NGO_message, ngo_pref)
+
+    def communicate_risk(self, main_attr: float, message, preference: float):
+        if main_attr >= 5:
+            # Generate a random number in [0, 0.05]
+            random_float = np.random.random() * 0.15
+            self.idatt += message * 10 / \
+                abs(self.own_pref - preference)
+
+            factor = 1
+            cond_1 = message > main_attr and self.own_pref < preference
+            cond_2 = message <= main_attr and self.own_pref > preference
+            if cond_1 or cond_2:
+                factor = -1
+
+            self.idatt *= (1 + factor * random_float)
+        else:
+            # Citizen will revert back to NGO_message if main_attr is too low
+            random_float = np.random.random() * 0.05
+            self.idatt = (1 + random_float) * \
+                (self.idatt + self.NGO_message * 0.01)
+            # self.idatt = min(max(self.idatt, 0), 100)# Cap between 100 and 0
+
+    # * Other
+    def update_post_tick_attribute(self):
         ''' Label up '''
         # Update the salience based on cits' type
         self.pref = ((self.proximity * 100) + self.idatt) / 2
+        # self.pref = min(max(self.pref, 0), 100)  # Cap between 100 and 0
 
         # (CBO or not CBO, that's the question)
         self.salience = self.disruption * self.proximity * self.type
 
-        # self.pref = min(max(self.pref, 0), 100)  # Cap between 100 and 0
+        # Salient preference
         self.tpreference = self.pref * self.salience
 
         val_1 = self.pref * self.power * self.salience * 0.9
-        if hasattr(self, "cbo_power"):
-            val_1 = self.pref * self.cbo_power * self.salience * 0.9
+        # if hasattr(self, "cbo_power"):
+        #     val_1 = self.pref * self.cbo_power * self.salience * 0.9
 
         val_2 = self.ran * 0.1
         self.im = (val_1 + val_2) * 1.2 / (200 * self.efficiency_parameter)
@@ -78,8 +131,9 @@ class CitAgent(GeoAgent):
         # * Influence model 2
         self.message += self.im
 
+    # * Main
     def step(self):
         # Forming coalition will be handled by the model
         #   before this agent.step() is called
-        self.update_post_tick_attribute()
         self.execute_influence_model()
+        self.update_post_tick_attribute()

@@ -1,5 +1,4 @@
 # Core libraries
-from sh_agent import StakeholderAgent
 from mesa import Model
 from mesa.time import BaseScheduler
 from mesa_geo import GeoSpace
@@ -9,9 +8,12 @@ from mesa.datacollection import DataCollector
 from geopy import distance
 import pprint
 # Custom libraries
-from cit_agent import CitAgent
 from model_helper import CoalitionHelper, ModelCalculator
-from agent_helper import AgentHelper
+# Types
+from typing import List, Dict
+from cit_agent import CitAgent
+from sh_agent import StakeholderAgent
+from model_types import All_Agent_Type
 '''NOTES'''
 # sh: stakeholder
 # cit: citizen
@@ -19,14 +21,24 @@ from agent_helper import AgentHelper
 
 class NetLogoModel(Model):
     """A model with some number of agents."""
-    cit_list = []   # List of citizen
+    # List of citizen
+    cit_list: List[CitAgent] = []
     cbo_list = []   # List of cits' CBOs
-    sh_list = []    # List of stakeholder
+    sh_list = []
     sh_cbo_list = []    # List of stakeholder's CBOs
     # For performance issue
     #   we use dict for fast lookup and modification
-    agent_dict = {}
+    agent_dict: Dict[str, All_Agent_Type] = {}
 
+    # Other
+    # List of stakeholder from csv file
+    special_sh_list:  List[StakeholderAgent] = []
+
+    # Big-NGO and Utility-info
+    need: float = 0
+    procedure: float = 0
+
+    # * Default methods
     def __init__(self,
                  cit_pd,
                  stakeholder_pd,
@@ -46,21 +58,26 @@ class NetLogoModel(Model):
         self.grid = GeoSpace(crs={"init": "epsg:4326"})
         self.schedule = BaseScheduler(self)
 
-        self.talk_span = meta_data['talk_span']
-        self.total_cit = meta_data['actual_num_cit']
-        disruption = meta_data['disruption']
-        NGO_message = meta_data['NGO_message']
-        self.neighbor_type = neighbor_type
-        self.efficiency_parameter = efficiency_parameter
+        self.talk_span: float = meta_data['talk_span']
+        self.total_cit: int = meta_data['actual_num_cit']
 
-        sum_power = 0
+        disruption: float = meta_data['disruption']
+        self.need: float = meta_data['need']
+        NGO_message: float = meta_data['NGO_message']
+        self.procedure: float = meta_data['procedure']
+        sponsor_message: float = meta_data['sponsor_message']
+
+        self.neighbor_type: int = neighbor_type
+        self.efficiency_parameter: float = efficiency_parameter
+
         # * Initialize agents
+        sum_power = 0
         if self.log_level >= 2:
             print("Initializing citizens")
 
         # --- Create citizens
-        cit_list = cit_pd.to_dict(orient='records')
-        for cit_attr in cit_list:
+        for cit_attr in cit_pd.to_dict(orient='records'):
+            # * Citizen
             # ? Should we leave this here
             if cit_attr['proximity'] > 1:
                 continue
@@ -72,6 +89,7 @@ class NetLogoModel(Model):
             attr_list = cit_attr.copy()   # Make a copy to avoid side-effect
             attr_list['disruption'] = disruption
             attr_list['NGO_message'] = NGO_message
+            attr_list['sponsor_message'] = sponsor_message
             attr_list['efficiency_parameter'] = efficiency_parameter
 
             # Then create an agent out of those
@@ -86,17 +104,15 @@ class NetLogoModel(Model):
             sum_power += attr_list['power']
 
         # --- Create stakeholders
-        sh_list = stakeholder_pd.to_dict(orient='records')
-        for sh_attr in sh_list:
+        for sh_attr in stakeholder_pd.to_dict(orient='records'):
+            # * Stakeholder
             attr_list = sh_attr.copy()   # Make a copy to avoid side-effect
-            attr_list['disruption'] = disruption
-            attr_list['NGO_message'] = NGO_message
-            attr_list['efficiency_parameter'] = efficiency_parameter
 
             # Then create an agent out of those
             agent = StakeholderAgent(self, attr_list, cit_power=sum_power)
-            self.schedule.add(agent)
+            # self.schedule.add(agent)  # ! Double check this
             self.sh_list.append(agent)
+            self.special_sh_list.append(agent)
 
             # Add the reference to that agent
             self.agent_dict[sh_attr['id']] = agent
@@ -108,41 +124,66 @@ class NetLogoModel(Model):
         # Set up data collector
         self.datacollector = DataCollector(
             model_reporters={
-                # "Total preference":
-                # ModelCalculator.compute_total("pref"),
-                # "Total utility":
-                # ModelCalculator.compute_total("utility"),
-                # "Total salient":
-                # ModelCalculator.compute_total("salience"),
-                # #  "Total salient preference":
-                # #  ModelCalculator.compute_total("tpreference"),
-                # "Idatt":
-                # ModelCalculator.compute_total("idatt"),
-                # "Total influence message":
-                # ModelCalculator.compute_total("im"),
-                # "Total own preference":
-                # ModelCalculator.compute_total("own_pref"),
-                # #  "Total power":
-                # #  ModelCalculator.compute_total("power"),
-                # "Total Message":
-                # ModelCalculator.compute_total("message"),
+                "Total preference":
+                ModelCalculator.compute_total("pref"),
+                "Total utility":
+                ModelCalculator.compute_total("utility"),
+                "Total salient":
+                ModelCalculator.compute_total("salience"),
+                #  "Total salient preference":
+                #  ModelCalculator.compute_total("tpreference"),
+                "Idatt":
+                ModelCalculator.compute_total("idatt"),
+                "Total influence message":
+                ModelCalculator.compute_total("im"),
+                "Total own preference":
+                ModelCalculator.compute_total("own_pref"),
+                #  "Total power":
+                #  ModelCalculator.compute_total("power"),
+                "Total Message":
+                ModelCalculator.compute_total("message"),
             },
             agent_reporters={
-                # "Preference": "pref",
-                # "Utility": "utility",
-                # "Salience": "salience",
-                # #  "Salient preference": "tpreference",
-                # "Idatt": "idatt",
-                # "Influence message": "im",
-                # #  "Own pref": "own_pref",
-                # #  "Power": "power",
-                # "Message": "message"
+                "Preference": "pref",
+                "Utility": "utility",
+                "Salience": "salience",
+                #  "Salient preference": "tpreference",
+                "Idatt": "idatt",
+                "Influence message": "im",
+                #  "Own pref": "own_pref",
+                #  "Power": "power",
+                "Message": "message"
             }
         )
 
     def step(self):
         self.print_log(1, f"---STARTING tick {self.schedule.steps}")
 
+        # ******** Forming citizen coalition
+        self.send_cit_messages()
+
+        # ******** Forming sh coalition
+        self.send_sh_messages()
+
+        # ******** Utility and Big-NGO
+        self.communicate_big_ngo_risk()
+        self.communicate_sponsor_risk()
+
+        # ******** Advance the model by one step
+        self.print_log(2, "Agents start stepping")
+        self.schedule.step()
+
+        # ******** Collect stats
+        self.print_log(2, "Collecting data")
+        self.datacollector.collect(self)
+
+        self.print_log(1, f"---ENDING tick {self.schedule.steps}\n")
+
+    #
+    #
+    '''------Main Methods------'''
+
+    def send_cit_messages(self):
         # ******** Forming citizen coalition
         self.print_log(2, "Sending messages for potential coalitions")
 
@@ -164,11 +205,18 @@ class NetLogoModel(Model):
         for coalition in cit_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
+            # Make sure this is a citizen
+            assert isinstance(agent_1, CitAgent)
+            assert isinstance(agent_2, CitAgent)
+
             agent_1.update_cit_coalition_attrs(coalition)
             agent_2.update_cit_coalition_attrs(coalition)
             self.cbo_list.append(agent_1)
             self.cbo_list.append(agent_2)
 
+            self.sh_list.append(agent_1)    # Always add only agent 1 as sh
+
+    def send_sh_messages(self):
         # ******** Forming sh coalition
         self.print_log(2, "Sending messages for potential coalitions")
 
@@ -190,25 +238,38 @@ class NetLogoModel(Model):
         for coalition in sh_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
+            # Make sure this is a citizen or stakeholder
+            assert isinstance(agent_1, (StakeholderAgent, CitAgent))
+            assert isinstance(agent_2, (StakeholderAgent, CitAgent))
+
             agent_1.update_sh_coalition_attrs(coalition)
             agent_2.update_sh_coalition_attrs(coalition)
             self.sh_cbo_list.append(agent_1)
             self.sh_cbo_list.append(agent_2)
 
-        # ******** Advance the model by one step
-        self.print_log(2, "Agents start stepping")
-        self.schedule.step()
+    def communicate_sponsor_risk(self):
+        # Formerly utility-info
+        counter = 0
+        sum_pref = 0
+        for stakeholder in self.special_sh_list:
+            if stakeholder.is_sponsor:
+                counter += 1
+                sum_pref += stakeholder.sh_pref
 
-        # ******** Check for stakeholder
-        for cit in self.schedule.agents:
-            if cit.isSh is True and cit not in self.sh_list:
-                self.sh_list.append(cit)
+        for cit in self.cit_list:
+            cit.communicate_sponsor_risk(self.need, sum_pref / counter)
 
-        # ******** Collect stats
-        self.print_log(2, "Collecting data")
-        self.datacollector.collect(self)
+    def communicate_big_ngo_risk(self):
+        # Formerly big-NGO
+        counter = 0
+        sum_pref = 0
+        for stakeholder in self.special_sh_list:
+            if stakeholder.is_big_ngo:
+                counter += 1
+                sum_pref += stakeholder.sh_pref
 
-        self.print_log(1, f"---ENDING tick {self.schedule.steps}\n")
+        for cit in self.cit_list:
+            cit.communicate_big_ngo_risk(self.procedure, sum_pref / counter)
 
     #
     #

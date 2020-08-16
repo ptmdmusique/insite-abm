@@ -94,6 +94,23 @@ initializer_batch_params = {
         "values": [1, 5, 10],
         "default": 4.5,
     },
+    "sponsor_message": {
+        "type": "set",
+        "values": [1, 5, 10],
+        "default": 2.5,
+    },
+    "need": {
+        "type": "range",
+        # min, max, step
+        "values": [0, 10, 0.5],
+        "default": 3.5,
+    },
+    "procedure": {
+        "type": "range",
+        # min, max, step
+        "values": [0, 10, 0.5],
+        "default": 3.5,
+    },
 }
 # Used for running the model    # TODO: Remove this
 model_batch_params = {
@@ -101,12 +118,12 @@ model_batch_params = {
         "type": "set",
         "values": [1, 5, 10],
     },
-    "needs": {
+    "need": {
         "type": "range",
         # min, max, step
         "values": [0, 10, 0.5],
     },
-    "utility_message": {
+    "sponsor_message": {
         "type": "set",
         "values": [1, 5, 10]
     },

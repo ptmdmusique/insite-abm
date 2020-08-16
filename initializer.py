@@ -79,6 +79,9 @@ def analyze_input(meta_data):
     # Misc data
     talk_span = meta_data['talk_span']
     NGO_message = meta_data['NGO_message']
+    sponsor_message = meta_data['sponsor_message']
+    need = meta_data['need']
+    procedure = meta_data['procedure']
 
     # Paths
     # Path to citizen shapefile
@@ -320,6 +323,9 @@ def analyze_input(meta_data):
             "disruption": disruption,
             "talk_span": talk_span,
             "NGO_message": NGO_message,
+            "sponsor_message": sponsor_message,
+            "need": need,
+            "procedure": procedure
         }, json_file)
 
 
@@ -335,22 +341,25 @@ if __name__ == '__main__':
         # Other parameters
         'talk_span': float(sys.argv[4]),
         'NGO_message': float(sys.argv[5]),
+        'sponsor_message': float(sys.argv[6]),
+        'need': float(sys.argv[7]),
+        'procedure': float(sys.argv[8]),
 
         # Paths
         # Path to citizen shapefile
-        'cit_path': sys.argv[6],
+        'cit_path': sys.argv[9],
         # Path to route shapefile
-        'route_path': sys.argv[7],
+        'route_path': sys.argv[10],
         # Path to csv out file
-        'out_CSV_path': sys.argv[8],
+        'out_CSV_path': sys.argv[11],
         # Path to cit json out file
-        'out_cit_path': sys.argv[9],
+        'out_cit_path': sys.argv[12],
         # Path to chosen cit geojson
-        'out_shape_path': sys.argv[10],
+        'out_shape_path': sys.argv[13],
         # Path to chosen cit geojson with minimal info
-        'out_compact_path': sys.argv[11],
+        'out_compact_path': sys.argv[14],
         # Path to other information
-        'out_meta_path': sys.argv[12],
+        'out_meta_path': sys.argv[15],
     }
 
     analyze_input(meta_data)

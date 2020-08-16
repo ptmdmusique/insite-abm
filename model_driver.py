@@ -15,7 +15,6 @@ import json
 import os
 # Stats
 import time
-from mesa import agent
 # Helper
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -91,9 +90,9 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
     regulator_list = pd.read_csv(regulator_path)
     # Add unique id to each agent
     stakeholder_list['id'] = [uuid.uuid4()
-                                     for _ in range(len(stakeholder_list))]
+                              for _ in range(len(stakeholder_list))]
     regulator_list['id'] = [uuid.uuid4()
-                                   for _ in range(len(regulator_list))]
+                            for _ in range(len(regulator_list))]
 
     # * RUN MODEL
     # Drive the model!
@@ -115,7 +114,7 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
     print(agent_data.corr())
     agent_data.reset_index().corr().to_csv("./correlation.csv")
 
-    # plt.show()  # comment or uncomment for batch run
+    plt.show()  # comment or uncomment for batch run
 
     # * OUTPUTING
     if model_output_path is not None:
