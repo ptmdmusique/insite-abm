@@ -103,7 +103,7 @@ class CitAgent(GeoAgent):
             # self.idatt = min(max(self.idatt, 0), 100)# Cap between 100 and 0
 
     # * Other
-    def update_post_tick_attribute(self):
+    def execute_label_up(self):
         ''' Label up '''
         # Update the salience based on cits' type
         self.pref = ((self.proximity * 100) + self.idatt) / 2
@@ -133,7 +133,4 @@ class CitAgent(GeoAgent):
 
     # * Main
     def step(self):
-        # Forming coalition will be handled by the model
-        #   before this agent.step() is called
-        self.execute_influence_model()
-        self.update_post_tick_attribute()
+        pass

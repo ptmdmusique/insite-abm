@@ -1,4 +1,5 @@
 # Core libraries
+from regulator_agent import RegulatorAgent
 from mesa import Model
 from mesa.time import BaseScheduler
 from mesa_geo import GeoSpace
@@ -31,8 +32,9 @@ class NetLogoModel(Model):
     agent_dict: Dict[str, All_Agent_Type] = {}
 
     # Other
-    # List of stakeholder from csv file
+    # List of stakeholder and regulator from csv file
     special_sh_list:  List[StakeholderAgent] = []
+    special_regulator_list: List[RegulatorAgent] = []
 
     # Big-NGO and Utility-info
     need: float = 0
@@ -50,6 +52,10 @@ class NetLogoModel(Model):
                  neighbor_type=0,
                  efficiency_parameter=1.5, log_level=0):
         self.log_level = log_level
+
+        # Store all the dataframe for later use
+        self.stakeholder_pd = stakeholder_pd
+        self.regulator_pd = regulator_pd
 
         if self.log_level >= 2:
             print("Initializing model")
@@ -71,7 +77,6 @@ class NetLogoModel(Model):
         self.efficiency_parameter: float = efficiency_parameter
 
         # * Initialize agents
-        sum_power = 0
         if self.log_level >= 2:
             print("Initializing citizens")
 
@@ -100,22 +105,6 @@ class NetLogoModel(Model):
 
             # Add the reference to that agent
             self.agent_dict[cit_attr['id']] = agent
-
-            sum_power += attr_list['power']
-
-        # --- Create stakeholders
-        for sh_attr in stakeholder_pd.to_dict(orient='records'):
-            # * Stakeholder
-            attr_list = sh_attr.copy()   # Make a copy to avoid side-effect
-
-            # Then create an agent out of those
-            agent = StakeholderAgent(self, attr_list, cit_power=sum_power)
-            # self.schedule.add(agent)  # ! Double check this
-            self.sh_list.append(agent)
-            self.special_sh_list.append(agent)
-
-            # Add the reference to that agent
-            self.agent_dict[sh_attr['id']] = agent
 
         # * Initialize data collectors
         if self.log_level >= 2:
@@ -159,15 +148,43 @@ class NetLogoModel(Model):
     def step(self):
         self.print_log(1, f"---STARTING tick {self.schedule.steps}")
 
-        # ******** Forming citizen coalition
-        self.send_cit_messages()
+        # * 1. Cits talking
+        if self.schedule.steps <= 20:
+            # ******** Forming citizen coalition
+            self.send_cit_messages()    # Turtle-talk
 
-        # ******** Forming sh coalition
-        self.send_sh_messages()
+        # * 2. Regulator and stakeholder setup
+        if self.schedule.steps == 1:
+            self.setup_stakeholder()    # Stakeholder-setup
+        if self.schedule.steps > 1:
+            self.update_stakeholder_pre_tick()  # Stakeholder-setup 2
 
-        # ******** Utility and Big-NGO
-        self.communicate_big_ngo_risk()
-        self.communicate_sponsor_risk()
+        if self.schedule.steps == 15:
+            self.setup_regulator()  # Regulator-setup
+        if self.schedule.steps > 15:
+            self.update_regulator_pre_tick()  # Regulator-setup 2
+
+        # * 3. Regulator and stakeholder talking
+        if self.schedule.steps <= 20:
+            # ******** Forming sh coalition
+            self.send_sh_messages()     # Stakeholder-talk
+
+        if self.schedule.steps >= 21:
+            self.send_regulator_messages()     # Regulator-talk
+
+        # * Post tick update
+        if self.schedule.steps >= 1:
+            # ******** Utility and Big-NGO
+            self.communicate_sponsor_risk()  # Utility-info
+            self.communicate_big_ngo_risk()  # Big-NGO
+
+        self.merge_cbo()
+
+        if self.schedule.steps == 25:
+            self.start_regulator_vote()
+
+        self.execute_influence_model()
+        self.execute_label_up()
 
         # ******** Advance the model by one step
         self.print_log(2, "Agents start stepping")
@@ -183,6 +200,7 @@ class NetLogoModel(Model):
     #
     '''------Main Methods------'''
 
+    # * Cit stuff
     def send_cit_messages(self):
         # ******** Forming citizen coalition
         self.print_log(2, "Sending messages for potential coalitions")
@@ -216,6 +234,62 @@ class NetLogoModel(Model):
 
             self.sh_list.append(agent_1)    # Always add only agent 1 as sh
 
+    def communicate_sponsor_risk(self):
+        # Formerly utility-info
+        counter = 0
+        sum_pref = 0
+        for stakeholder in self.special_sh_list:
+            if stakeholder.is_sponsor:
+                counter += 1
+                sum_pref += stakeholder.sh_pref
+
+        for cit in self.cit_list:
+            cit.communicate_sponsor_risk(self.need, sum_pref / counter)
+
+    def communicate_big_ngo_risk(self):
+        # Formerly big-NGO
+        counter = 0
+        sum_pref = 0
+        for stakeholder in self.special_sh_list:
+            if stakeholder.is_big_ngo:
+                counter += 1
+                sum_pref += stakeholder.sh_pref
+
+        for cit in self.cit_list:
+            cit.communicate_big_ngo_risk(self.procedure, sum_pref / counter)
+
+    def execute_influence_model(self):
+        for cits in self.cit_list:
+            cits.execute_influence_model()
+
+    def execute_label_up(self):
+        for cits in self.cit_list:
+            cits.execute_label_up()
+
+    # * Stakeholder stuff
+    def setup_stakeholder(self):
+        # --- Create stakeholders
+        # First find the sum power of all cit
+        sum_power = 0
+        for cit in self.cit_list:
+            sum_power += cit.power
+
+        # Then create stakeholder based on that
+        for sh_attr in self.stakeholder_pd.to_dict(orient='records'):
+            attr_list = sh_attr.copy()   # Make a copy to avoid side-effect
+
+            # Then create an agent out of those
+            agent = StakeholderAgent(self, attr_list, cit_power=sum_power)
+            # self.schedule.add(agent)  # ! Double check this
+            self.sh_list.append(agent)
+            self.special_sh_list.append(agent)
+
+            # Add the reference to that agent
+            self.agent_dict[sh_attr['id']] = agent
+
+    def update_stakeholder_pre_tick(self):
+        pass
+
     def send_sh_messages(self):
         # ******** Forming sh coalition
         self.print_log(2, "Sending messages for potential coalitions")
@@ -247,29 +321,47 @@ class NetLogoModel(Model):
             self.sh_cbo_list.append(agent_1)
             self.sh_cbo_list.append(agent_2)
 
-    def communicate_sponsor_risk(self):
-        # Formerly utility-info
-        counter = 0
-        sum_pref = 0
-        for stakeholder in self.special_sh_list:
-            if stakeholder.is_sponsor:
-                counter += 1
-                sum_pref += stakeholder.sh_pref
+    # * Regulator stuff
+    def setup_regulator(self):
+        # --- Create stakeholders
+        # First find the sum power of all cit
+        sum_power = 0
+        for stakeholder in self.sh_list:
+            sum_power += stakeholder.sh_power
 
-        for cit in self.cit_list:
-            cit.communicate_sponsor_risk(self.need, sum_pref / counter)
+        # Then create stakeholder based on that
+        for regulator_attr in self.regulator_pd.to_dict(orient='records'):
+            # * Stakeholder
+            attr_list = regulator_attr.copy()   # Make a copy to avoid side-effect
 
-    def communicate_big_ngo_risk(self):
-        # Formerly big-NGO
-        counter = 0
-        sum_pref = 0
-        for stakeholder in self.special_sh_list:
-            if stakeholder.is_big_ngo:
-                counter += 1
-                sum_pref += stakeholder.sh_pref
+            # Then create an agent out of those
+            agent = RegulatorAgent(self, attr_list, sh_power=sum_power)
+            # self.schedule.add(agent)  # ! Double check this
+            self.sh_list.append(agent)
+            self.special_regulator_list.append(agent)
 
-        for cit in self.cit_list:
-            cit.communicate_big_ngo_risk(self.procedure, sum_pref / counter)
+            # Add the reference to that agent
+            self.agent_dict[regulator_attr['id']] = agent
+
+    def update_regulator_pre_tick(self):
+        pass
+
+    def send_regulator_messages(self):
+        pass
+
+    # * Others
+    def merge_cbo(self):
+        if self.schedule.steps == 1:
+            pass
+        elif self.schedule.steps <= 20:
+            if self.schedule.steps == 20:
+                # Halt cit in cbo
+                pass
+        else:
+            pass
+
+    def start_regulator_vote(self):
+        pass
 
     #
     #

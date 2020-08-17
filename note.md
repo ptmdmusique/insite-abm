@@ -62,6 +62,8 @@ In the third way, agents convey their attitude every iteration, but only after r
 # Questions:
 1. ? After each tick, pro dev cits normalizes their power with cbo-power of pro dev cits. Same for anti dev cits.
 2. ? if a citizen becomes a stakeholder, would they join utility-info or big-ngo?
+3. ? What does patch-cbo do?
+4. ? What does the ticks >= 1 of stakeholder-setup do? Same for regulator
 
 # Future plan:
 1. Implement a check to stop the model after there is no more change

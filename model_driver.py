@@ -114,7 +114,7 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
     print(agent_data.corr())
     agent_data.reset_index().corr().to_csv("./correlation.csv")
 
-    plt.show()  # comment or uncomment for batch run
+    # plt.show()  # comment or uncomment for batch run
 
     # * OUTPUTING
     if model_output_path is not None:

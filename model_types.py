@@ -8,4 +8,4 @@ CBOable_Agent_List = Union[List[CBOable_Agent],
                            List[CitAgent],
                            List[StakeholderAgent]]
 
-All_Agent_Type = Union[CitAgent, StakeholderAgent]
+All_Agent_Type = Union[CitAgent, StakeholderAgent, RegulatorAgent]
