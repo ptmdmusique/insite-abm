@@ -26,7 +26,7 @@ class CitAgent(GeoAgent):
     cbo_power: float = 0
 
     # * Stakeholder parameter setup
-    is_sh: bool = False  # Always start as a non stakeholder
+    can_negotiate_sh: bool = False  # Always start as a non stakeholder negotiator
     sh_power: float = 0
     sh_pref: float = 0
     sh_utility: float = 0
@@ -105,10 +105,10 @@ class CitAgent(GeoAgent):
     # * Other
     def execute_label_up(self):
         ''' Label up '''
-        # Update the salience based on cits' type
         self.pref = ((self.proximity * 100) + self.idatt) / 2
         # self.pref = min(max(self.pref, 0), 100)  # Cap between 100 and 0
 
+        # Update the salience based on cits' type
         # (CBO or not CBO, that's the question)
         self.salience = self.disruption * self.proximity * self.type
 

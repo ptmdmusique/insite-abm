@@ -7,8 +7,8 @@ from agent_helper import AgentHelper
 
 class RegulatorAgent(Agent):
     """A pure stakeholder in our model."""
-    is_sh = True  # Always a stakeholder
-    is_regulator = True
+    can_negotiate_sh = True  # Always a stakeholder
+    can_negotiate_regulator = True
 
     def __init__(self, model: Model, attr_list: Dict, sh_power: float):
         super().__init__(attr_list['id'], model)
@@ -29,7 +29,7 @@ class RegulatorAgent(Agent):
         self.regulator_power = sh_power * attr_list['scale'] * 2
         self.sh_power = self.regulator_power
         self.regulator_utility = 100 * self.regulator_power
+        self.sh_utility = 100 * self.regulator_utility
 
-    def update_regulator_coalition_attrs(self, pending_regulator_coalition):
-        AgentHelper.update_regulator_coalition_attrs(
-            self, pending_regulator_coalition)
+    def update_regulator_coalition_attrs(self, pending_coalition):
+        AgentHelper.update_regulator_coalition_attrs(self, pending_coalition)

@@ -20,7 +20,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import uuid
 
-from netlogo_model import NetLogoModel
+from netlogo_model import InsiteModel
 
 
 def read_JSON(path):
@@ -52,7 +52,7 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
     def drive_model(log_level=0):
         '''RUNNING MODEL'''
         # Load in and run the model
-        netlogo_model = NetLogoModel(
+        netlogo_model = InsiteModel(
             cit_pd=agent_list,
             geojson_list=cit_geojson,
 

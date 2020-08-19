@@ -7,7 +7,7 @@ from agent_helper import AgentHelper
 
 class StakeholderAgent(Agent):
     """A pure stakeholder in our model."""
-    is_sh = True  # Always a stakeholder
+    can_negotiate_sh = True  # Always a stakeholder
     is_sponsor = False
     is_big_ngo = False
 

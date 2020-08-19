@@ -4,9 +4,9 @@ from mesa import Model
 from mesa.time import BaseScheduler
 from mesa_geo import GeoSpace
 from shapely.geometry import Polygon
+from geopy import distance
 # Statistics and loggings
 from mesa.datacollection import DataCollector
-from geopy import distance
 import pprint
 # Custom libraries
 from model_helper import CoalitionHelper, ModelCalculator
@@ -20,40 +20,41 @@ from model_types import All_Agent_Type
 # cit: citizen
 
 
-class NetLogoModel(Model):
+class InsiteModel(Model):
     """A model with some number of agents."""
     # List of citizen
     cit_list: List[CitAgent] = []
     cbo_list = []   # List of cits' CBOs
-    sh_list = []
-    sh_cbo_list = []    # List of stakeholder's CBOs
+    # List of those who can negotiate with stakeholder
+    sh_negotiator_list = []
+    # List of CBOs created after negotiating with stakeholder
+    sh_in_coalition_list = []    # Can includes cits or stakeholder
+    # Strictly regulator
+    regulator_negotiator_list = []
+    regulator_in_coalition_list: List[RegulatorAgent] = []
     # For performance issue
     #   we use dict for fast lookup and modification
     agent_dict: Dict[str, All_Agent_Type] = {}
-
-    # Other
     # List of stakeholder and regulator from csv file
-    special_sh_list:  List[StakeholderAgent] = []
-    special_regulator_list: List[RegulatorAgent] = []
+    sh_list:  List[StakeholderAgent] = []
+    regulator_list: List[RegulatorAgent] = []
 
     # Big-NGO and Utility-info
     need: float = 0
     procedure: float = 0
 
+    # Other
+    is_regulator_anti: bool = False
+
     # * Default methods
     def __init__(self,
-                 cit_pd,
-                 stakeholder_pd,
-                 regulator_pd,
-                 geojson_list,
-
-                 meta_data,
-
-                 neighbor_type=0,
+                 cit_pd, stakeholder_pd, regulator_pd,
+                 geojson_list, meta_data, neighbor_type=0,
                  efficiency_parameter=1.5, log_level=0):
         self.log_level = log_level
 
         # Store all the dataframe for later use
+        self.cit_pd = cit_pd
         self.stakeholder_pd = stakeholder_pd
         self.regulator_pd = regulator_pd
 
@@ -67,44 +68,19 @@ class NetLogoModel(Model):
         self.talk_span: float = meta_data['talk_span']
         self.total_cit: int = meta_data['actual_num_cit']
 
-        disruption: float = meta_data['disruption']
+        self.disruption: float = meta_data['disruption']
         self.need: float = meta_data['need']
-        NGO_message: float = meta_data['NGO_message']
+        self.NGO_message: float = meta_data['NGO_message']
         self.procedure: float = meta_data['procedure']
-        sponsor_message: float = meta_data['sponsor_message']
+        self.sponsor_message: float = meta_data['sponsor_message']
 
         self.neighbor_type: int = neighbor_type
         self.efficiency_parameter: float = efficiency_parameter
 
-        # * Initialize agents
+        # * Initialize citizens
         if self.log_level >= 2:
             print("Initializing citizens")
-
-        # --- Create citizens
-        for cit_attr in cit_pd.to_dict(orient='records'):
-            # * Citizen
-            # ? Should we leave this here
-            if cit_attr['proximity'] > 1:
-                continue
-
-            # Extract the geojson of that agent
-            shape = Polygon(
-                geojson_list[str(cit_attr['id'])]['coordinates'][0])
-
-            attr_list = cit_attr.copy()   # Make a copy to avoid side-effect
-            attr_list['disruption'] = disruption
-            attr_list['NGO_message'] = NGO_message
-            attr_list['sponsor_message'] = sponsor_message
-            attr_list['efficiency_parameter'] = efficiency_parameter
-
-            # Then create an agent out of those
-            agent = CitAgent(self, attr_list, shape)
-            self.grid.add_agents(agent)
-            self.schedule.add(agent)
-            self.cit_list.append(agent)
-
-            # Add the reference to that agent
-            self.agent_dict[cit_attr['id']] = agent
+        self.setup_cit(geojson_list)
 
         # * Initialize data collectors
         if self.log_level >= 2:
@@ -147,6 +123,13 @@ class NetLogoModel(Model):
 
     def step(self):
         self.print_log(1, f"---STARTING tick {self.schedule.steps}")
+        '''Order'''
+        # Cit will send messages starting from tick 0
+        # Stakeholder will send messages starting from tick 1
+        #   with whoever in stakeholder negotiator list
+        # Regulator will send messages starting from tick 15
+        #   with whoever in stakeholder negotiator list
+        # Regulator will talk among themself starting from tick 21
 
         # * 1. Cits talking
         if self.schedule.steps <= 20:
@@ -201,26 +184,54 @@ class NetLogoModel(Model):
     '''------Main Methods------'''
 
     # * Cit stuff
+    def setup_cit(self, geojson_list):
+        # --- Create citizens
+        for cit_attr in self.cit_pd.to_dict(orient='records'):
+            # * Citizen
+            # ? Should we leave this here
+            if cit_attr['proximity'] > 1:
+                continue
+
+            # Extract the geojson of that agent
+            shape = Polygon(
+                geojson_list[str(cit_attr['id'])]['coordinates'][0])
+
+            attr_list = cit_attr.copy()   # Make a copy to avoid side-effect
+            attr_list['disruption'] = self.disruption
+            attr_list['NGO_message'] = self.NGO_message
+            attr_list['sponsor_message'] = self.sponsor_message
+            attr_list['efficiency_parameter'] = self.efficiency_parameter
+
+            # Then create an agent out of those
+            agent = CitAgent(self, attr_list, shape)
+            self.grid.add_agents(agent)
+            self.schedule.add(agent)
+            self.cit_list.append(agent)
+
+            # Add the reference to that agent
+            self.agent_dict[cit_attr['id']] = agent
+
     def send_cit_messages(self):
         # ******** Forming citizen coalition
         self.print_log(2, "Sending messages for potential coalitions")
 
-        cit_coalition_helper = CoalitionHelper(
+        coalition_helper = CoalitionHelper(
             "unique_id", "power",
             "own_pref", "utility",
             self.efficiency_parameter, log_level=self.log_level)
         # * Trying to form all coalitions
         #   and ignore the one who is already in CBO
-        cit_coalition_list = cit_coalition_helper.form_coalition(
+        potential_coalition_list = coalition_helper.form_coalition(
             self.get_neighbor_dispatcher(self.neighbor_type),
             agent_list=self.cit_list,
             ignored_list=self.cbo_list)
 
-        self.print_log(3, "List of all coalition: ", cit_coalition_list)
+        self.print_log(3, "List of all cits coalition: ",
+                       potential_coalition_list)
 
         # * Update the cit coalition of all eligible agent
         self.print_log(2, "Sending messages to agent for new coalition list")
-        for coalition in cit_coalition_list:
+        for coalition in potential_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
             # Make sure this is a citizen
@@ -232,13 +243,14 @@ class NetLogoModel(Model):
             self.cbo_list.append(agent_1)
             self.cbo_list.append(agent_2)
 
-            self.sh_list.append(agent_1)    # Always add only agent 1 as sh
+            # Always add only agent 1 as sh
+            self.sh_negotiator_list.append(agent_1)
 
     def communicate_sponsor_risk(self):
         # Formerly utility-info
         counter = 0
         sum_pref = 0
-        for stakeholder in self.special_sh_list:
+        for stakeholder in self.sh_list:
             if stakeholder.is_sponsor:
                 counter += 1
                 sum_pref += stakeholder.sh_pref
@@ -250,7 +262,7 @@ class NetLogoModel(Model):
         # Formerly big-NGO
         counter = 0
         sum_pref = 0
-        for stakeholder in self.special_sh_list:
+        for stakeholder in self.sh_list:
             if stakeholder.is_big_ngo:
                 counter += 1
                 sum_pref += stakeholder.sh_pref
@@ -281,8 +293,8 @@ class NetLogoModel(Model):
             # Then create an agent out of those
             agent = StakeholderAgent(self, attr_list, cit_power=sum_power)
             # self.schedule.add(agent)  # ! Double check this
+            self.sh_negotiator_list.append(agent)
             self.sh_list.append(agent)
-            self.special_sh_list.append(agent)
 
             # Add the reference to that agent
             self.agent_dict[sh_attr['id']] = agent
@@ -294,22 +306,23 @@ class NetLogoModel(Model):
         # ******** Forming sh coalition
         self.print_log(2, "Sending messages for potential coalitions")
 
-        sh_coalition_helper = CoalitionHelper(
+        coalition_helper = CoalitionHelper(
             "unique_id", "sh_power",
             "sh_pref", "sh_utility",
             self.efficiency_parameter, log_level=self.log_level)
         # * Trying to form all coalitions
         #   and ignore the one who is already in CBO
-        sh_coalition_list = sh_coalition_helper.form_coalition(
+        potential_coalition_list = coalition_helper.form_coalition(
             self.get_neighbor_dispatcher(0),    # Always get all neighbors
-            agent_list=self.sh_list,
-            ignored_list=self.sh_cbo_list)
+            agent_list=self.sh_negotiator_list,
+            ignored_list=self.sh_in_coalition_list)
 
-        self.print_log(3, "List of all coalition: ", sh_coalition_list)
+        self.print_log(3, "List of all sh coalition: ",
+                       potential_coalition_list)
 
         # * Update the stakeholder coalition of all eligible agent
         self.print_log(2, "Sending messages to agent for new coalition list")
-        for coalition in sh_coalition_list:
+        for coalition in potential_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
             # Make sure this is a citizen or stakeholder
@@ -318,27 +331,29 @@ class NetLogoModel(Model):
 
             agent_1.update_sh_coalition_attrs(coalition)
             agent_2.update_sh_coalition_attrs(coalition)
-            self.sh_cbo_list.append(agent_1)
-            self.sh_cbo_list.append(agent_2)
+            self.sh_in_coalition_list.append(agent_1)
+            self.sh_in_coalition_list.append(agent_2)
 
     # * Regulator stuff
     def setup_regulator(self):
         # --- Create stakeholders
         # First find the sum power of all cit
         sum_power = 0
-        for stakeholder in self.sh_list:
+        for stakeholder in self.sh_negotiator_list:
             sum_power += stakeholder.sh_power
 
         # Then create stakeholder based on that
         for regulator_attr in self.regulator_pd.to_dict(orient='records'):
-            # * Stakeholder
-            attr_list = regulator_attr.copy()   # Make a copy to avoid side-effect
+            # Make a copy to avoid side-effect
+            attr_list = regulator_attr.copy()
 
             # Then create an agent out of those
             agent = RegulatorAgent(self, attr_list, sh_power=sum_power)
             # self.schedule.add(agent)  # ! Double check this
-            self.sh_list.append(agent)
-            self.special_regulator_list.append(agent)
+            # Also negotiate with other stakeholders
+            self.sh_negotiator_list.append(agent)
+            self.regulator_list.append(agent)
+            self.regulator_negotiator_list.append(agent)
 
             # Add the reference to that agent
             self.agent_dict[regulator_attr['id']] = agent
@@ -347,10 +362,40 @@ class NetLogoModel(Model):
         pass
 
     def send_regulator_messages(self):
-        pass
+        # ******** Forming regulator coalition
+        self.print_log(2, "Sending messages for potential coalitions")
+
+        coalition_helper = CoalitionHelper(
+            "unique_id", "regulator_power",
+            "regulator_pref", "regulator_utility",
+            self.efficiency_parameter, log_level=self.log_level)
+        # * Trying to form all coalitions
+        #   and ignore the one who is already in CBO
+        potential_regulator_coalition_list = coalition_helper.form_coalition(
+            self.get_neighbor_dispatcher(0),    # Always get all neighbors
+            agent_list=self.regulator_negotiator_list,
+            ignored_list=self.regulator_in_coalition_list)
+
+        self.print_log(3, "List of all regulator coalition: ",
+                       potential_regulator_coalition_list)
+
+        # * Update the stakeholder coalition of all eligible agent
+        self.print_log(2, "Sending messages to agent for new coalition list")
+        for coalition in potential_regulator_coalition_list:
+            agent_1 = self.agent_dict[coalition['id_1']]
+            agent_2 = self.agent_dict[coalition['id_2']]
+            # Make sure this is a regulator
+            assert isinstance(agent_1, RegulatorAgent)
+            assert isinstance(agent_2, RegulatorAgent)
+
+            agent_1.update_regulator_coalition_attrs(coalition)
+            agent_2.update_regulator_coalition_attrs(coalition)
+            self.regulator_in_coalition_list.append(agent_1)
+            self.regulator_in_coalition_list.append(agent_2)
 
     # * Others
     def merge_cbo(self):
+        # ? Used for later displaying
         if self.schedule.steps == 1:
             pass
         elif self.schedule.steps <= 20:
@@ -361,7 +406,15 @@ class NetLogoModel(Model):
             pass
 
     def start_regulator_vote(self):
-        pass
+        num_regulator_anti = 0
+        num_regulator_pro = 0
+        for regulator in self.regulator_list:
+            if regulator.regulator_pref <= 50:
+                num_regulator_pro += 1
+            else:
+                num_regulator_anti
+        if num_regulator_pro <= num_regulator_anti:
+            self.is_regulator_anti = True
 
     #
     #
@@ -405,9 +458,7 @@ class NetLogoModel(Model):
     def get_direct_neighbors(self, agent, _):
         # Get the direct neighbor of the specified agent
         potential_neighbors = self.grid.get_neighbors(agent)
-        neighbors = list(
-            filter(lambda n: n not in self.cbo_list, potential_neighbors))
-        return neighbors
+        return potential_neighbors
 
     def get_neighbors_within_talk_span(self, agent, agent_list):
         result = []
