@@ -1,4 +1,6 @@
 # Core libraries
+from libpysal.weights.util import order
+from shapely.geometry.polygon import orient
 from regulator_agent import RegulatorAgent
 from mesa import Model
 from mesa.time import BaseScheduler
@@ -9,6 +11,7 @@ from geopy import distance
 from mesa.datacollection import DataCollector
 import pprint
 # Custom libraries
+from stat_helper import CustomAgentDataCollector
 from model_helper import CoalitionHelper, ModelCalculator
 # Types
 from typing import List, Dict
@@ -22,44 +25,42 @@ from model_types import All_Agent_Type
 
 class InsiteModel(Model):
     """A model with some number of agents."""
-    # List of citizen
-    cit_list: List[CitAgent] = []
-    cbo_list = []   # List of cits' CBOs
-    # List of those who can negotiate with stakeholder
-    sh_negotiator_list = []
-    # List of CBOs created after negotiating with stakeholder
-    sh_in_coalition_list = []    # Can includes cits or stakeholder
-    # Strictly regulator
-    regulator_negotiator_list = []
-    regulator_in_coalition_list: List[RegulatorAgent] = []
-    # For performance issue
-    #   we use dict for fast lookup and modification
-    agent_dict: Dict[str, All_Agent_Type] = {}
-    # List of stakeholder and regulator from csv file
-    sh_list:  List[StakeholderAgent] = []
-    regulator_list: List[RegulatorAgent] = []
 
-    # Big-NGO and Utility-info
-    need: float = 0
-    procedure: float = 0
-
-    # Other
-    is_regulator_anti: bool = False
-
-    # * Default methods
     def __init__(self,
                  cit_pd, stakeholder_pd, regulator_pd,
                  geojson_list, meta_data, neighbor_type=0,
                  efficiency_parameter=1.5, log_level=0):
         self.log_level = log_level
 
-        # Store all the dataframe for later use
+        # * Default values
+        # List of citizen
+        self.cit_list: List[CitAgent] = []
+        self.cbo_list = []   # List of cits' CBOs
+        # List of those who can negotiate with stakeholder
+        self.sh_negotiator_list = []
+        # List of CBOs created after negotiating with stakeholder
+        self.sh_in_coalition_list = []    # Can includes cits or stakeholder
+        # Strictly regulator
+        self.regulator_negotiator_list = []
+        self.regulator_in_coalition_list: List[RegulatorAgent] = []
+        # For performance issue
+        #   we use dict for fast lookup and modification
+        self.agent_dict: Dict[str, All_Agent_Type] = {}
+        # List of stakeholder and regulator from csv file
+        self.sh_list:  List[StakeholderAgent] = []
+        self.regulator_list: List[RegulatorAgent] = []
+        # Big-NGO and Utility-info
+        self.need: float = 0
+        self.procedure: float = 0
+        # Otherb
+        self.is_regulator_anti: bool = False
+
+        # * Store all the dataframe for later use
         self.cit_pd = cit_pd
         self.stakeholder_pd = stakeholder_pd
         self.regulator_pd = regulator_pd
 
-        if self.log_level >= 2:
-            print("Initializing model")
+        self.print_log(2, "Initializing model")
 
         # * Initialize mesa
         self.grid = GeoSpace(crs={"init": "epsg:4326"})
@@ -78,51 +79,46 @@ class InsiteModel(Model):
         self.efficiency_parameter: float = efficiency_parameter
 
         # * Initialize citizens
-        if self.log_level >= 2:
-            print("Initializing citizens")
+        self.print_log(2, "Initializing citizens")
         self.setup_cit(geojson_list)
 
         # * Initialize data collectors
-        if self.log_level >= 2:
-            print("Initializing data collectors")
+        self.print_log(2, "Initializing data collectors")
 
         # Set up data collector
         self.datacollector = DataCollector(
             model_reporters={
-                "Total preference":
-                ModelCalculator.compute_total("pref"),
-                "Total utility":
-                ModelCalculator.compute_total("utility"),
-                "Total salient":
-                ModelCalculator.compute_total("salience"),
-                #  "Total salient preference":
-                #  ModelCalculator.compute_total("tpreference"),
-                "Idatt":
-                ModelCalculator.compute_total("idatt"),
-                "Total influence message":
-                ModelCalculator.compute_total("im"),
-                "Total own preference":
-                ModelCalculator.compute_total("own_pref"),
-                #  "Total power":
-                #  ModelCalculator.compute_total("power"),
-                "Total Message":
-                ModelCalculator.compute_total("message"),
+                "Total preference": ModelCalculator.compute_total("pref"),
+                "Total power": ModelCalculator.compute_total("power"),
             },
             agent_reporters={
                 "Preference": "pref",
-                "Utility": "utility",
-                "Salience": "salience",
-                #  "Salient preference": "tpreference",
-                "Idatt": "idatt",
-                "Influence message": "im",
-                #  "Own pref": "own_pref",
-                #  "Power": "power",
-                "Message": "message"
+                "Power": "power",
             }
         )
 
+        self.sh_collector: CustomAgentDataCollector = CustomAgentDataCollector(
+            model_reporters={
+                "Total sh preference": ModelCalculator.compute_total("sh_pref"),
+            },
+            agent_reporters={
+                "Stakeholder preference": "sh_pref",
+            },
+            agent_list=self.sh_list
+        )
+        self.regulator_collector: CustomAgentDataCollector = CustomAgentDataCollector(
+            model_reporters={
+                "Total regulator preference": ModelCalculator.compute_total("regulator_pref"),
+            },
+            agent_reporters={
+                "Regulator preference": "regulator_pref",
+            },
+            agent_list=self.regulator_list
+        )
+
     def step(self):
-        self.print_log(1, f"---STARTING tick {self.schedule.steps}")
+        cur_tick = self.schedule.steps
+        self.print_log(1, f"---STARTING tick {cur_tick}")
         '''Order'''
         # Cit will send messages starting from tick 0
         # Stakeholder will send messages starting from tick 1
@@ -132,38 +128,38 @@ class InsiteModel(Model):
         # Regulator will talk among themself starting from tick 21
 
         # * 1. Cits talking
-        if self.schedule.steps <= 20:
+        if cur_tick <= 20:
             # ******** Forming citizen coalition
             self.send_cit_messages()    # Turtle-talk
 
         # * 2. Regulator and stakeholder setup
-        if self.schedule.steps == 1:
+        if cur_tick == 1:
             self.setup_stakeholder()    # Stakeholder-setup
-        if self.schedule.steps > 1:
+        if cur_tick > 1:
             self.update_stakeholder_pre_tick()  # Stakeholder-setup 2
 
-        if self.schedule.steps == 15:
+        if cur_tick == 15:
             self.setup_regulator()  # Regulator-setup
-        if self.schedule.steps > 15:
+        if cur_tick > 15:
             self.update_regulator_pre_tick()  # Regulator-setup 2
 
         # * 3. Regulator and stakeholder talking
-        if self.schedule.steps <= 20:
+        if cur_tick <= 20 and cur_tick >= 1:
             # ******** Forming sh coalition
             self.send_sh_messages()     # Stakeholder-talk
 
-        if self.schedule.steps >= 21:
+        if cur_tick >= 21:
             self.send_regulator_messages()     # Regulator-talk
 
         # * Post tick update
-        if self.schedule.steps >= 1:
+        if cur_tick >= 1:
             # ******** Utility and Big-NGO
             self.communicate_sponsor_risk()  # Utility-info
             self.communicate_big_ngo_risk()  # Big-NGO
 
         self.merge_cbo()
 
-        if self.schedule.steps == 25:
+        if cur_tick == 25:
             self.start_regulator_vote()
 
         self.execute_influence_model()
@@ -176,8 +172,10 @@ class InsiteModel(Model):
         # ******** Collect stats
         self.print_log(2, "Collecting data")
         self.datacollector.collect(self)
+        self.sh_collector.collect(cur_tick)
+        self.regulator_collector.collect(cur_tick)
 
-        self.print_log(1, f"---ENDING tick {self.schedule.steps}\n")
+        self.print_log(1, f"---ENDING tick {cur_tick}\n")
 
     #
     #
@@ -213,7 +211,7 @@ class InsiteModel(Model):
 
     def send_cit_messages(self):
         # ******** Forming citizen coalition
-        self.print_log(2, "Sending messages for potential coalitions")
+        self.print_log(2, "Sending cit messages STARTS")
 
         coalition_helper = CoalitionHelper(
             "unique_id", "power",
@@ -230,7 +228,6 @@ class InsiteModel(Model):
                        potential_coalition_list)
 
         # * Update the cit coalition of all eligible agent
-        self.print_log(2, "Sending messages to agent for new coalition list")
         for coalition in potential_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
@@ -245,6 +242,7 @@ class InsiteModel(Model):
 
             # Always add only agent 1 as sh
             self.sh_negotiator_list.append(agent_1)
+        self.print_log(2, "Sending cit messages ENDS")
 
     def communicate_sponsor_risk(self):
         # Formerly utility-info
@@ -304,7 +302,7 @@ class InsiteModel(Model):
 
     def send_sh_messages(self):
         # ******** Forming sh coalition
-        self.print_log(2, "Sending messages for potential coalitions")
+        self.print_log(2, "Sending stakeholder messages STARTS")
 
         coalition_helper = CoalitionHelper(
             "unique_id", "sh_power",
@@ -321,18 +319,20 @@ class InsiteModel(Model):
                        potential_coalition_list)
 
         # * Update the stakeholder coalition of all eligible agent
-        self.print_log(2, "Sending messages to agent for new coalition list")
         for coalition in potential_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
             # Make sure this is a citizen or stakeholder
-            assert isinstance(agent_1, (StakeholderAgent, CitAgent))
-            assert isinstance(agent_2, (StakeholderAgent, CitAgent))
+            assert isinstance(
+                agent_1, (StakeholderAgent, CitAgent, RegulatorAgent))
+            assert isinstance(
+                agent_2, (StakeholderAgent, CitAgent, RegulatorAgent))
 
             agent_1.update_sh_coalition_attrs(coalition)
             agent_2.update_sh_coalition_attrs(coalition)
             self.sh_in_coalition_list.append(agent_1)
             self.sh_in_coalition_list.append(agent_2)
+        self.print_log(2, "Sending stakeholder messages ENDS")
 
     # * Regulator stuff
     def setup_regulator(self):
@@ -350,10 +350,10 @@ class InsiteModel(Model):
             # Then create an agent out of those
             agent = RegulatorAgent(self, attr_list, sh_power=sum_power)
             # self.schedule.add(agent)  # ! Double check this
-            # Also negotiate with other stakeholders
-            self.sh_negotiator_list.append(agent)
             self.regulator_list.append(agent)
             self.regulator_negotiator_list.append(agent)
+            # Also negotiate with other stakeholders
+            self.sh_negotiator_list.append(agent)
 
             # Add the reference to that agent
             self.agent_dict[regulator_attr['id']] = agent
@@ -363,7 +363,7 @@ class InsiteModel(Model):
 
     def send_regulator_messages(self):
         # ******** Forming regulator coalition
-        self.print_log(2, "Sending messages for potential coalitions")
+        self.print_log(2, "Sending regluator messages STARTS")
 
         coalition_helper = CoalitionHelper(
             "unique_id", "regulator_power",
@@ -379,8 +379,7 @@ class InsiteModel(Model):
         self.print_log(3, "List of all regulator coalition: ",
                        potential_regulator_coalition_list)
 
-        # * Update the stakeholder coalition of all eligible agent
-        self.print_log(2, "Sending messages to agent for new coalition list")
+        # * Update the regulator coalition of all eligible agent
         for coalition in potential_regulator_coalition_list:
             agent_1 = self.agent_dict[coalition['id_1']]
             agent_2 = self.agent_dict[coalition['id_2']]
@@ -392,6 +391,7 @@ class InsiteModel(Model):
             agent_2.update_regulator_coalition_attrs(coalition)
             self.regulator_in_coalition_list.append(agent_1)
             self.regulator_in_coalition_list.append(agent_2)
+        self.print_log(2, "Sending regulator messages ENDS")
 
     # * Others
     def merge_cbo(self):
@@ -467,7 +467,7 @@ class InsiteModel(Model):
         agent_coords = list(agent_center.coords)[0][::-1]
 
         for other in agent_list:
-            if agent is other:
+            if agent is other or other:
                 continue
 
             other_center = other.shape.centroid

@@ -11,7 +11,7 @@ META_DATA_FILENAME = "meta-data.json"
 
 STAKEHOLDER_PATH = "data/input/stakeholders.csv"
 REGULATOR_PATH = "data/input/regulators.csv"
-AGENT_OUTPUT_PATH = "data/output/agent_data.csv"
+CIT_OUTPUT_PATH = "data/output/cit_data.csv"
 MODEL_OUTPUT_PATH = "data/output/model_data.csv"
 
 STEP0_FOLDER_PATH = "data/step0"
@@ -38,7 +38,7 @@ def run_with_timer(func, purpose, log_level=0):
 
 # Clean up old file
 run_with_timer(lambda:
-               Path(AGENT_OUTPUT_PATH).unlink(missing_ok=True),
+               Path(CIT_OUTPUT_PATH).unlink(missing_ok=True),
                "Cleaning old agent file")
 run_with_timer(lambda:
                Path(MODEL_OUTPUT_PATH).unlink(missing_ok=True),
@@ -62,7 +62,7 @@ def run_batch():
                   meta_data_path=meta_data_path,
                   stakeholder_path=STAKEHOLDER_PATH,
                   regulator_path=REGULATOR_PATH,
-                  agent_output_path=AGENT_OUTPUT_PATH,
+                  cit_output_path=CIT_OUTPUT_PATH,
                   model_output_path=MODEL_OUTPUT_PATH)
 
 

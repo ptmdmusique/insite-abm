@@ -9,34 +9,36 @@ from agent_helper import AgentHelper
 
 class CitAgent(GeoAgent):
     """A citizen in our model."""
-    # * Initial State
-    type: int = 1   # 1: regular citizen ; 2: in CBO
-    message: int = 0  # Message cit sends out
-    pent: float = 0   # For influence model 1
-    own_pref: float = 0
-    power: float = 0
-
-    proximity: float = 0
-    disruption: float = 1
-    efficiency_parameter: float = 1.5
-    ran: float = 0
-
-    # * CBO Stuff
-    cbo_pref: float = 0
-    cbo_power: float = 0
-
-    # * Stakeholder parameter setup
-    can_negotiate_sh: bool = False  # Always start as a non stakeholder negotiator
-    sh_power: float = 0
-    sh_pref: float = 0
-    sh_utility: float = 0
-
-    # * Other
-    NGO_message: float = 0
-    sponsor_message: float = 0
 
     # * Default methods
     def __init__(self, model: Model, attr_list: Dict, shape):
+        # * Initial State
+        self.type: int = 1   # 1: regular citizen ; 2: in CBO
+        self.message: int = 0  # Message cit sends out
+        self.pent: float = 0   # For influence model 1
+        self.own_pref: float = 0
+        self.power: float = 0
+
+        self.proximity: float = 0
+        self.disruption: float = 1
+        self.efficiency_parameter: float = 1.5
+        self.ran: float = 0
+
+        # * CBO Stuff
+        self.cbo_pref: float = 0
+        self.cbo_power: float = 0
+
+        # * Stakeholder parameter setup
+        # Always start as a non stakeholder negotiator
+        self.can_negotiate_sh: bool = False
+        self.sh_power: float = 0
+        self.sh_pref: float = 0
+        self.sh_utility: float = 0
+
+        # * Other
+        self.NGO_message: float = 0
+        self.sponsor_message: float = 0
+
         # Make sure the shape is a shapely object
         if not isinstance(shape, BaseGeometry):
             raise TypeError("Shape must be a Shapely Geometry")

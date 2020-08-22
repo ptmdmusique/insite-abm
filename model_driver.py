@@ -13,6 +13,7 @@ Use mesa and mesa-geo to build Insite Software agent based modelling
 # File system
 import json
 import os
+from os.path import join
 # Stats
 import time
 # Helper
@@ -20,7 +21,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import uuid
 
-from netlogo_model import InsiteModel
+from insite_model import InsiteModel
 
 
 def read_JSON(path):
@@ -48,7 +49,10 @@ def run_with_timer(func, purpose, log_level=0):
 def run_model(tick_path, cit_geojson_path, meta_data_path,
               stakeholder_path, regulator_path,
               total_ticks=26,
-              agent_output_path=None, model_output_path=None):
+              cit_output_path=None,
+              sh_output_path=None,
+              regulator_output_path=None,
+              model_output_path=None):
     def drive_model(log_level=0):
         '''RUNNING MODEL'''
         # Load in and run the model
@@ -68,6 +72,16 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
             netlogo_model.step()
 
         return netlogo_model
+
+    def draw_scatter_plot(data_set, x_label):
+        for axis_key in data_set.columns.values:
+            plot = data_set.reset_index().plot.scatter(x=x_label, y=axis_key)
+            plot.set_xlabel("Tick")
+
+    def draw_line_plot(data_set, x_label):
+        for axis_key in data_set.columns.values:
+            plot = data_set.reset_index().plot.line(x=x_label, y=axis_key)
+            plot.set_xlabel("Tick")
 
     # * LOADING DATA
     # Load in the data file then pass it into the model
@@ -96,25 +110,30 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
 
     # * RUN MODEL
     # Drive the model!
-    netlogo_model = run_with_timer(
+    insite_model = run_with_timer(
         drive_model, "Running Netlogo model",
         log_level=0)
 
+    # * COLLECTING DATA
+    cit_model_data = insite_model.datacollector.get_model_vars_dataframe()
+    cit_data = insite_model.datacollector.get_agent_vars_dataframe()
+    sh_model_data = insite_model.sh_collector.get_model_vars_dataframe()
+    sh_data = insite_model.sh_collector.get_agent_vars_dataframe()
+    regulator_model_data = insite_model.regulator_collector.get_model_vars_dataframe()
+    regulator_data = insite_model.regulator_collector.get_agent_vars_dataframe()
+
+    cit_data.reset_index().corr().to_csv("./correlation.csv")
+
     # * PLOTTING RESULT
-    model_data = netlogo_model.datacollector.get_model_vars_dataframe()
-    for axis_key in model_data.columns.values:
-        plot = model_data.reset_index().plot.line(x="index", y=axis_key)
-        plot.set_xlabel("Tick")
-
-    agent_data = netlogo_model.datacollector.get_agent_vars_dataframe()
-    for axis_key in agent_data.columns.values:
-        plot = agent_data.reset_index().plot.scatter(x="Step", y=axis_key)
-        plot.set_xlabel("Tick")
-
-    print(agent_data.corr())
-    agent_data.reset_index().corr().to_csv("./correlation.csv")
-
-    # plt.show()  # comment or uncomment for batch run
+    # comment or uncomment for batch run
+    # draw_line_plot(cit_model_data, "index")
+    # draw_scatter_plot(cit_data, "Step")
+    # draw_line_plot(sh_model_data, "index")
+    # draw_scatter_plot(sh_data, "Step")
+    # draw_line_plot(regulator_model_data, "index")
+    # draw_scatter_plot(regulator_data, "Step")
+    # print(cit_data.corr())
+    # plt.show()
 
     # * OUTPUTING
     if model_output_path is not None:
@@ -123,31 +142,33 @@ def run_model(tick_path, cit_geojson_path, meta_data_path,
             append_write = 'a'  # append if already exists
 
         # Append new meta column into the file
-        model_data.insert(1, "Num Cit", meta_data['actual_num_cit'])
-        model_data.insert(1, "Disruption", meta_data['disruption'])
-        model_data.insert(1, "Talk span", meta_data['talk_span'])
-        model_data.insert(1, "NGO Message", meta_data['NGO_message'])
+        cit_model_data.insert(1, "Num Cit", meta_data['actual_num_cit'])
+        cit_model_data.insert(1, "Disruption", meta_data['disruption'])
+        cit_model_data.insert(1, "Talk span", meta_data['talk_span'])
+        cit_model_data.insert(1, "NGO Message", meta_data['NGO_message'])
         # And write it out to file
         with open(model_output_path, append_write) as out_file:
-            model_data.to_csv(out_file,
-                              header=out_file.tell() == 0,
-                              line_terminator='\n')
+            dfs = [cit_model_data, sh_model_data, regulator_model_data]
+            final_df = pd.concat([df.stack() for df in dfs], axis=0).unstack()
+            final_df.to_csv(out_file,
+                            header=out_file.tell() == 0,
+                            line_terminator='\n')
 
-    if agent_output_path is not None:
+    if cit_output_path is not None:
         append_write = 'w'  # make a new file if not
-        if os.path.exists(agent_output_path):
+        if os.path.exists(cit_output_path):
             append_write = 'a'  # append if already exists
 
         # Append new meta column into the file
-        agent_data.insert(1, "Num Cit", meta_data['actual_num_cit'])
-        agent_data.insert(1, "Disruption", meta_data['disruption'])
-        agent_data.insert(1, "Talk span", meta_data['talk_span'])
-        agent_data.insert(1, "NGO Message", meta_data['NGO_message'])
+        cit_data.insert(1, "Num Cit", meta_data['actual_num_cit'])
+        cit_data.insert(1, "Disruption", meta_data['disruption'])
+        cit_data.insert(1, "Talk span", meta_data['talk_span'])
+        cit_data.insert(1, "NGO Message", meta_data['NGO_message'])
         # And write it out to file
-        with open(agent_output_path, append_write) as out_file:
-            agent_data.to_csv(out_file,
-                              header=out_file.tell() == 0,
-                              line_terminator='\n')
+        with open(cit_output_path, append_write) as out_file:
+            cit_data.to_csv(out_file,
+                            header=out_file.tell() == 0,
+                            line_terminator='\n')
 
 
 if __name__ == '__main__':

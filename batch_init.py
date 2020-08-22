@@ -74,7 +74,7 @@ initializer_batch_params = {
     "initial_number": {
         "type": "set",
         # Set of values
-        "values": [100, 250, 500, 1000],
+        "values": [100, 250, 500],
         "default": 100,
     },
     # Acceptable distance for cits (in km)

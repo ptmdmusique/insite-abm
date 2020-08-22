@@ -15,13 +15,15 @@ from model_types import CBOable_Agent, CBOable_Agent_List
 class ModelCalculator():
     @staticmethod
     def compute_total(attribute):
-        def helper(model):
+        def helper(model=None, agent_list=None):
             def reducer(accum, agent):
                 return accum + getattr(agent, attribute)
 
             result = 0
             try:
-                agents = model.schedule.agents
+                agents = agent_list if agent_list is not None   \
+                    else model.schedule.agents
+                # agents = model.schedule.agents
                 result = reduce(reducer, agents, 0)
                 # result = result if result == 0 else math.log(result)
             except AttributeError:
@@ -69,22 +71,23 @@ class CoalitionHelper():
         # Map of potential coalition of each agent where
         #   key: agent_id
         #   value: potential coalition of that agent
-        self.print_log(2, "Gathering potential coalitions")
         pot_coal_dict = {}
         id_of = attrgetter(self.id_key)
+
+        # Filter out the ignored list
+        old_len = len(agent_list)
+        agent_list = [
+            agent for agent in agent_list if agent not in ignored_list]
+        self.print_log(
+            2, "Gathering potential coalitions from {} agents out of {} agents"
+            .format(len(agent_list), old_len))
 
         # Try to form every possible coalition
         # This is technically an agent sending message out to others
         for agent in agent_list:
-            if agent in ignored_list:
-                continue
-
             # Check from one agent to another
             agent_id = id_of(agent)
             neighbor_list = get_neighbors(agent, agent_list)
-            # Filter CBOs out
-            neighbor_list = list(
-                filter(lambda x: x not in ignored_list, neighbor_list))
 
             for other in neighbor_list:
                 if id_of(other) == id_of(agent):
